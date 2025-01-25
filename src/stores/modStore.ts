@@ -15,9 +15,12 @@ export interface Mod {
 	downloadURL: string;
 }
 
-export const cachedVersions = writable({
-	steamodded: [] as string[],
-	talisman: [] as string[]
+export const cachedVersions = writable<{
+	steamodded: string[],
+	talisman: string[]
+}>({
+	steamodded: [],
+	talisman: []
 });
 
 
@@ -38,13 +41,13 @@ interface InstallationStatus {
 
 
 export enum Category {
-	Content,
-	Joker,
-	QualityOfLife,
-	Technical,
-	Miscellaneous,
-	ResourcePacks,
-	API
+	Content = 0,
+	Joker = 1,
+	QualityOfLife = 2,
+	Technical = 3,
+	Miscellaneous = 4,
+	ResourcePacks = 5,
+	API = 6
 }
 
 
@@ -52,11 +55,18 @@ export const currentModView = writable<Mod | null>(null);
 export const currentJokerView = writable<Mod | null>(null);
 export const searchResults = writable<Mod[]>([]);
 export const modsStore = writable<Mod[]>([]);
+
+
 export const installationStatus: Writable<InstallationStatus> = writable({});
 
 export const loadingStates2 = writable<{ [key: string]: boolean }>({});
-
-
+//
+//
+// modsStore.subscribe(value => {
+// 	if (typeof window !== 'undefined') {
+// 		localStorage.setItem('mods', JSON.stringify(value));
+// 	}
+// });
 
 
 function createPersistentCategory() {

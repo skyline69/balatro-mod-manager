@@ -76,6 +76,15 @@
 
 	onMount(() => {
 		const initialize = async () => {
+			if ($modsStore.length === 0) {
+				try {
+					isLoading = true;
+					mods = await fetchModDirectories();
+					// Handle installation status updates
+				} finally {
+					isLoading = false;
+				}
+			}
 			try {
 				isLoading = true;
 				mods = await fetchModDirectories();
@@ -211,24 +220,46 @@
 	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
 
-	function isValidCache(timestamp: number): boolean {
-		return Date.now() - timestamp < CACHE_DURATION;
+	// function isValidCache(timestamp: number): boolean {
+	// 	return Date.now() - timestamp < CACHE_DURATION;
+	// }
+
+	// // Store in localStorage
+	// function saveToCache(mods: Mod[]) {
+	// 	const cache = {
+	// 		timestamp: Date.now(),
+	// 		mods: mods,
+	// 	};
+	// 	localStorage.setItem("mods-cache", JSON.stringify(cache));
+	// }
+
+	async function saveToCache(mods: Mod[]) {
+		await invoke("save_mods_cache", { mods });
 	}
 
-	// Store in localStorage
-	function saveToCache(mods: Mod[]) {
-		const cache = {
-			timestamp: Date.now(),
-			mods: mods,
-		};
-		localStorage.setItem("mods-cache", JSON.stringify(cache));
-	}
+	// // Get from localStorage
+	// function getFromCache(): { mods: Mod[]; timestamp: number } | null {
+	// 	const cached = localStorage.getItem("mods-cache");
+	// 	if (!cached) return null;
+	// 	return JSON.parse(cached);
+	// }
 
-	// Get from localStorage
-	function getFromCache(): { mods: Mod[]; timestamp: number } | null {
-		const cached = localStorage.getItem("mods-cache");
-		if (!cached) return null;
-		return JSON.parse(cached);
+	async function getFromCache(): Promise<{
+		mods: Mod[];
+		timestamp: number;
+	} | null> {
+		try {
+			const cached = await invoke<[Mod[], number] | null>(
+				"load_mods_cache",
+			);
+			if (!cached) return null;
+
+			const [mods, timestamp] = cached;
+			return { mods, timestamp };
+		} catch (error) {
+			console.error("Error loading cache:", error);
+			return null;
+		}
 	}
 
 	async function checkImageExists(imageUrl: string): Promise<string> {
@@ -294,13 +325,21 @@
 	}
 
 	async function fetchModDirectories() {
-		// Check cache
-		const cached = getFromCache();
-		if (cached && isValidCache(cached.timestamp)) {
-			return cached.mods;
-		}
-
+		let cached: { mods: Mod[]; timestamp: number } | null = null;
 		try {
+			isLoading = true;
+
+			// Check cache with proper await
+			const cached = await getFromCache();
+
+			if (
+				cached &&
+				Date.now() - cached.timestamp * 1000 < CACHE_DURATION
+			) {
+				modsStore.set(cached.mods);
+				return cached.mods;
+			}
+
 			const response = await fetch(
 				"https://api.github.com/repos/skyline69/balatro-mod-index/contents/mods",
 			);
@@ -309,75 +348,91 @@
 			}
 
 			const directories = await response.json();
-			const mods = await Promise.all(
-				directories.map(async (dir: any) => {
-					try {
-						const [metaResponse, descResponse] = await Promise.all([
-							fetch(
-								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/meta.json`,
-							),
-							fetch(
-								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/description.md`,
-							),
-						]);
 
-						if (!metaResponse.ok || !descResponse.ok) {
-							throw new Error("Failed to fetch mod data");
-						}
-
-						const meta: ModMeta = await metaResponse.json();
-						const description = await descResponse.text();
-
-						// Handle last updated date more gracefully
-						let lastUpdated = "Unknown";
+			// Process mods with null filtering
+			const mods = (
+				await Promise.all(
+					directories.map(async (dir: any) => {
 						try {
-							lastUpdated = await getLastUpdated(meta.repo);
-						} catch {
-							console.log(
-								`Failed to fetch last updated for ${meta.title}`,
+							const [metaResponse, descResponse] =
+								await Promise.all([
+									fetch(
+										`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/meta.json`,
+									),
+									fetch(
+										`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/description.md`,
+									),
+								]);
+
+							if (!metaResponse.ok || !descResponse.ok) {
+								throw new Error("Failed to fetch mod data");
+							}
+
+							const meta: ModMeta = await metaResponse.json();
+							const description = await descResponse.text();
+
+							// Handle last updated date
+							let lastUpdated = "Unknown";
+							try {
+								lastUpdated = await getLastUpdated(meta.repo);
+							} catch {
+								console.log(
+									`Failed to fetch last updated for ${meta.title}`,
+								);
+							}
+
+							// Check image existence
+							const imageUrl = await checkImageExists(
+								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/thumbnail.jpg`,
 							);
+
+							// Convert categories to enum values with validation
+							const categories = meta.categories
+								.map(
+									(cat) =>
+										Category[cat as keyof typeof Category],
+								)
+								.filter(
+									(c): c is Category =>
+										typeof c !== "undefined",
+								);
+
+							return {
+								title: meta.title,
+								description,
+								image: imageUrl,
+								lastUpdated,
+								categories,
+								colors: getRandomColorPair(),
+								installed: false,
+								requires_steamodded:
+									meta["requires-steamodded"],
+								requires_talisman: meta["requires-talisman"],
+								publisher: meta.author,
+								repo: meta.repo,
+								downloadURL: meta.downloadURL,
+							};
+						} catch (error) {
+							console.error(
+								`Failed to process mod ${dir.name}:`,
+								error,
+							);
+							return null;
 						}
+					}),
+				)
+			).filter((mod): mod is Mod => mod !== null);
 
-						// Check image existence without logging 404
-						const imageUrl = await checkImageExists(
-							`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/thumbnail.jpg`,
-						);
-
-						return {
-							title: meta.title,
-							description,
-							image: imageUrl,
-							lastUpdated,
-							categories: meta.categories.map(
-								(cat) => Category[cat as keyof typeof Category],
-							),
-							colors: getRandomColorPair(),
-							installed: false,
-							requires_steamodded: meta["requires-steamodded"],
-							requires_talisman: meta["requires-talisman"],
-							publisher: meta.author,
-							repo: meta.repo,
-							downloadURL: meta.downloadURL,
-						};
-					} catch (error) {
-						console.error(
-							`Failed to process mod ${dir.name}:`,
-							error,
-						);
-						return null;
-					}
-				}),
-			);
-
-			saveToCache(mods);
+			await saveToCache(mods);
 			modsStore.set(mods);
 			return mods;
 		} catch (error) {
 			console.error("Failed to fetch mods:", error);
-			return cached?.mods || [];
+			return [];
+		} finally {
+			isLoading = false;
 		}
 	}
-
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
 		{ name: "Search", icon: Search },
@@ -427,7 +482,7 @@
 
 	$: showSearch = $currentCategory === "Search";
 
-	$: filteredMods = mods.filter((mod) => {
+	$: filteredMods = $modsStore.filter((mod) => {
 		switch ($currentCategory) {
 			case "Content":
 				return Array.isArray(mod.categories)

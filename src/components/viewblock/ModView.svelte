@@ -7,7 +7,7 @@
 		Trash2,
 		User,
 		ArrowLeft,
-		GithubIcon,
+		Github,
 	} from "lucide-svelte";
 	import { onMount } from "svelte";
 	import {
@@ -480,7 +480,7 @@
 							rel="noopener noreferrer"
 							class="repo-button"
 						>
-							<GithubIcon size={16} />
+							<Github size={16} />
 							Repository
 						</a>
 					{/if}
