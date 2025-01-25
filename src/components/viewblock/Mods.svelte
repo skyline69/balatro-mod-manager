@@ -220,29 +220,9 @@
 	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
 
-	// function isValidCache(timestamp: number): boolean {
-	// 	return Date.now() - timestamp < CACHE_DURATION;
-	// }
-
-	// // Store in localStorage
-	// function saveToCache(mods: Mod[]) {
-	// 	const cache = {
-	// 		timestamp: Date.now(),
-	// 		mods: mods,
-	// 	};
-	// 	localStorage.setItem("mods-cache", JSON.stringify(cache));
-	// }
-
 	async function saveToCache(mods: Mod[]) {
 		await invoke("save_mods_cache", { mods });
 	}
-
-	// // Get from localStorage
-	// function getFromCache(): { mods: Mod[]; timestamp: number } | null {
-	// 	const cached = localStorage.getItem("mods-cache");
-	// 	if (!cached) return null;
-	// 	return JSON.parse(cached);
-	// }
 
 	async function getFromCache(): Promise<{
 		mods: Mod[];
@@ -325,7 +305,6 @@
 	}
 
 	async function fetchModDirectories() {
-		let cached: { mods: Mod[]; timestamp: number } | null = null;
 		try {
 			isLoading = true;
 
@@ -445,15 +424,6 @@
 		{ name: "Resource Packs", icon: FolderHeart },
 		{ name: "API", icon: Gamepad2 },
 	];
-
-	// $: categories =
-	// 	currentModLoader === "lovely-only"
-	// 		? [
-	// 				baseCategories[0],
-	// 				{ name: "Active Mods", icon: Play },
-	// 				...baseCategories.slice(1),
-	// 			]
-	// 		: baseCategories;
 
 	const colorPairs = [
 		{ color1: "#4f6367", color2: "#425556" },
