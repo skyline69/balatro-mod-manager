@@ -20,6 +20,9 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { createEventDispatcher } from "svelte";
 	import { cachedVersions } from "../../stores/modStore";
+	import { onDestroy } from "svelte";
+
+	const VERSION_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
 	const dispatch = createEventDispatcher<{
 		checkDependencies: {
@@ -56,28 +59,44 @@
 	async function loadSteamoddedVersions() {
 		if (loadingVersions) return;
 
-		// Check cache first
-		if (cachedVersionsValue.steamodded.length > 0) {
-			steamoddedVersions = cachedVersionsValue.steamodded;
-			if (steamoddedVersions.length > 0) {
-				selectedVersion = steamoddedVersions[0];
+		try {
+			// Check disk cache first
+			const cached = await invoke<[string[], number]>(
+				"load_versions_cache",
+				{
+					modType: "steamodded",
+				},
+			);
+
+			if (
+				cached &&
+				Date.now() - cached[1] * 1000 < VERSION_CACHE_DURATION
+			) {
+				steamoddedVersions = cached[0];
+				if (steamoddedVersions.length > 0) {
+					selectedVersion = steamoddedVersions[0];
+				}
+				cachedVersions.update((c) => ({ ...c, steamodded: cached[0] }));
+				return;
 			}
-			return;
+		} catch (error) {
+			console.log("Version cache check failed:", error);
 		}
 
 		loadingVersions = true;
-
 		try {
 			const versions: string[] = await invoke("get_steamodded_versions");
 			steamoddedVersions = versions;
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
+
 			// Update cache
-			cachedVersions.update((cache) => ({
-				...cache,
-				steamodded: versions,
-			}));
+			cachedVersions.update((c) => ({ ...c, steamodded: versions }));
+			await invoke("save_versions_cache", {
+				modType: "steamodded",
+				versions: versions,
+			});
 		} catch (error) {
 			console.error("Failed to load Steamodded versions:", error);
 			steamoddedVersions = [];
@@ -89,29 +108,45 @@
 	async function loadTalismanVersions() {
 		if (loadingVersions) return;
 
-		// Check cache first
-		if (cachedVersionsValue.talisman.length > 0) {
-			talismanVersions = cachedVersionsValue.talisman;
-			if (talismanVersions.length > 0) {
-				selectedVersion = talismanVersions[0];
+		try {
+			// Check disk cache first
+			const cached = await invoke<[string[], number]>(
+				"load_versions_cache",
+				{ modType: "talisman" },
+			);
+
+			if (cached) {
+				const [versions, timestamp] = cached;
+				if (Date.now() - timestamp * 1000 < VERSION_CACHE_DURATION) {
+					talismanVersions = versions;
+					if (versions.length > 0) {
+						selectedVersion = versions[0];
+					}
+					cachedVersions.update((c) => ({
+						...c,
+						talisman: versions,
+					}));
+					return;
+				}
 			}
-			return;
+		} catch (error) {
+			console.log("Version cache check failed:", error);
 		}
 
 		loadingVersions = true;
 		try {
 			const versions: string[] = await invoke("get_talisman_versions");
-			// Make sure to update the state with the new : string[]versions
 			talismanVersions = versions;
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
 
 			// Update cache
-			cachedVersions.update((cache) => ({
-				...cache,
-				talisman: versions,
-			}));
+			cachedVersions.update((c) => ({ ...c, talisman: versions }));
+			await invoke("save_versions_cache", {
+				modType: "talisman",
+				versions: versions,
+			});
 		} catch (error) {
 			console.error("Failed to load Talisman versions:", error);
 			talismanVersions = [];
@@ -119,7 +154,6 @@
 			loadingVersions = false;
 		}
 	}
-
 	const getAllInstalledMods = async () => {
 		try {
 			const installed: InstalledMod[] = await invoke(
@@ -333,6 +367,11 @@
 			});
 		}
 	}
+
+	onDestroy(async () => {
+		// Optional: Clear memory cache if needed
+		cachedVersions.set({ steamodded: [], talisman: [] });
+	});
 
 	//
 	// $: if (mod) {

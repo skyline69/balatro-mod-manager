@@ -78,6 +78,64 @@ impl From<i32> for Category {
     }
 }
 
+// Add to your existing cache module
+pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<()> {
+    let mut path = dirs::cache_dir()
+        .context("Failed to get cache directory")?
+        .join("balatro-mod-manager");
+
+    std::fs::create_dir_all(&path)?;
+    path.push(format!("versions-{}.cache.bin.gz", mod_type));
+
+    let mut encoder = GzEncoder::new(File::create(&path)?, Compression::default());
+    let cache = VersionCache {
+        header: CacheHeader {
+            version: 1,
+            timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        },
+        versions: versions.to_vec(),
+    };
+
+    bincode::serialize_into(&mut encoder, &cache)?;
+    Ok(())
+}
+
+pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>> {
+    let path = dirs::cache_dir()
+        .context("Failed to get cache directory")?
+        .join("balatro-mod-manager")
+        .join(format!("versions-{}.cache.bin.gz", mod_type));
+
+    let mut file = match File::open(&path) {
+        Ok(f) => f,
+        Err(_) => return Ok(None),
+    };
+
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+    let decoder = GzDecoder::new(buffer.as_slice());
+
+    let cache: VersionCache = match bincode::deserialize_from(decoder) {
+        Ok(c) => c,
+        Err(_) => return Ok(None),
+    };
+
+    // Validate cache
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    if current_time - cache.header.timestamp > CACHE_DURATION {
+        return Ok(None);
+    }
+
+    Ok(Some(cache.versions))
+}
+
+// Add these structs to cache.rs
+#[derive(Serialize, Deserialize)]
+struct VersionCache {
+    header: CacheHeader,
+    versions: Vec<String>,
+}
+
 pub fn get_cache_path() -> Result<PathBuf> {
     let mut path = dirs::cache_dir()
         .context("Failed to get cache directory")?

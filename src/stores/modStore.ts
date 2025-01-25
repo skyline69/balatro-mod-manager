@@ -16,12 +16,24 @@ export interface Mod {
 }
 
 export const cachedVersions = writable<{
-	steamodded: string[],
-	talisman: string[]
+	steamodded: string[];
+	talisman: string[];
 }>({
-	steamodded: [],
-	talisman: []
+	steamodded: typeof window !== 'undefined'
+		? JSON.parse(localStorage.getItem('version-cache-steamodded') || '[]')
+		: [],
+	talisman: typeof window !== 'undefined'
+		? JSON.parse(localStorage.getItem('version-cache-talisman') || '[]')
+		: []
 });
+
+if (typeof window !== 'undefined') {
+	cachedVersions.subscribe(value => {
+		localStorage.setItem('version-cache-steamodded', JSON.stringify(value.steamodded));
+		localStorage.setItem('version-cache-talisman', JSON.stringify(value.talisman));
+	});
+}
+
 
 
 export interface DependencyCheck {
