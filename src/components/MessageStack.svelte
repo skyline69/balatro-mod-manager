@@ -1,88 +1,37 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
-
-	type Message = {
-		id: number;
-		text: string;
-		type: "success" | "error" | "warning" | "info";
-		position: number;
-	};
-
-	const types = {
-		success: {
-			bg: "#459373",
-			border: "white",
-			icon: "✓",
-		},
-		error: {
-			bg: "#644047",
-			border: "#A25B5B",
-			icon: "✕",
-		},
-		warning: {
-			bg: "#625C43",
-			border: "#A39358",
-			icon: "!",
-		},
-		info: {
-			bg: "#435662",
-			border: "#587A93",
-			icon: "i",
-		},
-	};
-
-	let messages: Message[] = [];
-	let counter = 0;
-
-	export function addMessage(
-		text: string,
-		type: "success" | "error" | "warning" | "info",
-	) {
-		const id = counter++;
-		// Find the lowest available position
-		const usedPositions = messages.map((m) => m.position);
-		let position = 0;
-		while (usedPositions.includes(position)) {
-			position++;
-		}
-
-		messages = [...messages, { id, text, type, position }];
-		setTimeout(() => {
-			messages = messages.filter((m) => m.id !== id);
-		}, 3000);
-	}
+	import { messageStore } from "../lib/stores";
 </script>
 
 <div class="message-stack">
-	{#each messages as message (message.id)}
+	{#each $messageStore as message (message.id)}
 		<div
-			class="message-box {message.type}"
-			in:fly={{ x: 300, duration: 300 }}
-			out:fly={{ y: 100, duration: 200 }}
-			style="top: {2 + message.position * 4.5}rem"
+			class="message {message.type}"
+			transition:fly={{ y: -20, duration: 200 }}
 		>
-			<span class="icon">{types[message.type].icon}</span>
-			<p>{message.text}</p>
+			{message.text}
 		</div>
 	{/each}
 </div>
 
 <style>
-	.message-box {
+	.message-stack {
 		position: fixed;
-		top: 2rem;
-		right: 2rem;
-		padding: 1rem 1.5rem;
-		border-radius: 12px;
+		top: 20px;
+		right: 20px;
+		z-index: 9999;
 		display: flex;
-		align-items: center;
-		gap: 1rem;
-		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-		z-index: 1000;
-		min-width: 300px;
-		max-width: 400px;
-		color: #f4eee0;
-		font-family: inherit;
+		flex-direction: column;
+		gap: 10px;
+		pointer-events: none;
+	}
+
+	.message {
+		padding: 12px 20px;
+		border-radius: 8px;
+		color: white;
+		font-weight: 500;
+		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 	}
 
 	.success {
@@ -108,11 +57,5 @@
 	.icon {
 		font-size: 1.2rem;
 		font-weight: bold;
-	}
-
-	p {
-		margin: 0;
-		font-size: 1.2rem;
-		line-height: 1.4;
 	}
 </style>

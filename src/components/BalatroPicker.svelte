@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
-	import MessageStack from "./MessageStack.svelte";
+	// import MessageStack from "./MessageStack.svelte";
+	import { addMessage } from "../lib/stores";
+
 	import { goto } from "$app/navigation";
 
-	let messageStack: MessageStack;
+	// let messageStack: MessageStack;
 
 	let selectedOption = "steam";
 	let showCustomInput = false;
@@ -47,13 +49,13 @@
 			if (selectedOption === "steam") {
 				const paths: string[] = await invoke("find_steam_balatro");
 				if (paths.length === 0) {
-					messageStack.addMessage(
+					addMessage(
 						"Balatro not found in Steam installation",
 						"error",
 					);
 				} else {
 					selectedPath = paths[0];
-					messageStack.addMessage(
+					addMessage(
 						"Successfully found Balatro installation",
 						"success",
 					);
@@ -63,10 +65,7 @@
 				}
 			} else if (selectedOption === "custom") {
 				if (!selectedPath) {
-					messageStack.addMessage(
-						"Please select a custom path",
-						"warning",
-					);
+					addMessage("Please select a custom path", "warning");
 					isLoading = false;
 					return;
 				}
@@ -74,7 +73,7 @@
 					path: selectedPath,
 				});
 				if (isValid) {
-					messageStack.addMessage(
+					addMessage(
 						"Successfully found Balatro installation",
 						"success",
 					);
@@ -82,11 +81,11 @@
 					await new Promise((resolve) => setTimeout(resolve, 1000));
 					await goto("/main", { replaceState: true });
 				} else {
-					messageStack.addMessage("Invalid Balatro path", "error");
+					addMessage("Invalid Balatro path", "error");
 				}
 			}
 		} catch (error) {
-			messageStack.addMessage("Error finding Balatro: " + error, "error");
+			addMessage("Error finding Balatro: " + error, "error");
 		} finally {
 			isLoading = false;
 		}
@@ -159,7 +158,7 @@
 		</div>
 	</div>
 </div>
-<MessageStack bind:this={messageStack} />
+<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	:root {

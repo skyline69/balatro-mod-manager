@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { invoke } from "@tauri-apps/api/core";
 	import LaunchAlertBox from "./LaunchAlertBox.svelte";
-	import MessageStack from "./MessageStack.svelte";
+	import { addMessage } from "../lib/stores";
 
 	let showAlert = false;
-	let messageStack: MessageStack;
 
 	const handleLaunch = async () => {
 		const path = await invoke("get_balatro_path");
@@ -13,7 +12,7 @@
 				"check_balatro_running",
 			);
 			if (is_balatro_running) {
-				messageStack.addMessage("Balatro is already running", "error");
+				addMessage("Balatro is already running", "error");
 				return;
 			}
 			let is_steam_running: boolean = await invoke("check_steam_running");
@@ -35,7 +34,7 @@
 	};
 </script>
 
-<MessageStack bind:this={messageStack} />
+<!-- <MessageStack bind:this={messageStack} /> -->
 
 <div class="launch-container">
 	<button class="launch-button" on:click={handleLaunch}> Launch </button>

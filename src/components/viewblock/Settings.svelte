@@ -1,11 +1,12 @@
 <script lang="ts">
 	import PathSelector from "../PathSelector.svelte";
-	import MessageStack from "../MessageStack.svelte";
+	// import MessageStack from "../MessageStack.svelte";
 	import { Settings2, RefreshCw } from "lucide-svelte";
+	import { addMessage } from "$lib/stores";
 
 	import { invoke } from "@tauri-apps/api/core";
 
-	let messageStack: MessageStack;
+	// let messageStack: MessageStack;
 	let isReindexing = false;
 	let isClearingCache = false;
 
@@ -13,9 +14,9 @@
 		isReindexing = true;
 		try {
 			await invoke("refresh_mods_folder");
-			messageStack.addMessage("Successfully re-indexed mods!", "success");
+			addMessage("Successfully re-indexed mods!", "success");
 		} catch (error) {
-			messageStack.addMessage(
+			addMessage(
 				"Failed to re-index mods: " + error,
 				"error",
 			);
@@ -28,12 +29,12 @@
 		isClearingCache = true;
 		try {
 			await invoke("clear_cache");
-			messageStack.addMessage(
+			addMessage(
 				"Successfully cleared all caches!",
 				"success",
 			);
 		} catch (error) {
-			messageStack.addMessage("Failed to clear cache: " + error, "error");
+			addMessage("Failed to clear cache: " + error, "error");
 		} finally {
 			isClearingCache = false;
 		}
@@ -79,7 +80,7 @@
 	</div>
 </div>
 
-<MessageStack bind:this={messageStack} />
+<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	h2 {
