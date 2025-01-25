@@ -2,8 +2,9 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { FolderDot } from "lucide-svelte";
 	import MessageStack from "./MessageStack.svelte";
+    import { addMessage } from "$lib/stores";
 
-	let messageStack: MessageStack;
+	// let messageStack: MessageStack;
 	let selectedPath = "";
 	let placeholder = "Choose Balatro Path";
 	let isLoading = false;
@@ -43,12 +44,12 @@
 
 			if (isValid) {
 				await invoke("set_balatro_path", { path: selectedPath });
-				messageStack.addMessage(
+				addMessage(
 					"Balatro path set successfully!",
 					"success",
 				);
 			} else {
-				messageStack.addMessage(
+				addMessage(
 					"Invalid Balatro path. Please select the correct directory.",
 					"error",
 				);
@@ -62,20 +63,20 @@
 		try {
 			const paths: string[] = await invoke("find_steam_balatro");
 			if (paths.length === 0) {
-				messageStack.addMessage(
+				addMessage(
 					"Balatro not found in Steam installation",
 					"error",
 				);
 			} else {
 				selectedPath = paths[0];
 				await invoke("set_balatro_path", { path: selectedPath });
-				messageStack.addMessage(
+				addMessage(
 					"Successfully set Steam path",
 					"success",
 				);
 			}
 		} catch (error) {
-			messageStack.addMessage(
+			addMessage(
 				"Error finding Steam path: " + error,
 				"error",
 			);
@@ -106,7 +107,7 @@
 	</button>
 </div>
 
-<MessageStack bind:this={messageStack} />
+<!-- <MessageStack bind:this={messageStack} /> -->
 
 <style>
 	.path-selector {
