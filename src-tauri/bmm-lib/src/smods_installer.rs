@@ -324,3 +324,43 @@ impl ModInstaller {
 //         Ok(())
 //     }
 // }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockito::mock;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_steamodded_installation() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let installer = ModInstaller::new(ModType::Steamodded);
+        
+        // Mock GitHub API response
+        let _m = mock("GET", "/repos/Steamodded/smods/releases")
+            .with_status(200)
+            .with_body(r#"[{
+                "tag_name": "v1.0.0",
+                "name": "Release 1.0.0",
+                "prerelease": false,
+                "zipball_url": "https://github.com/Steamodded/smods/zipball/v1.0.0"
+            }]"#)
+            .create();
+
+        let versions = installer.get_available_versions().await?;
+        assert!(!versions.is_empty());
+        assert_eq!(versions[0], "v1.0.0");
+
+        // Test installation with mocked zip file
+        let _m = mock("GET", "/repos/Steamodded/smods/zipball/v1.0.0")
+            .with_body(include_bytes!("testdata/smods_test.zip"))
+            .create();
+
+        let result = installer.install_version("v1.0.0").await?;
+        assert!(result.contains("Steamodded-smods-"));
+        assert!(PathBuf::from(result).exists());
+
+        Ok(())
+    }
+}

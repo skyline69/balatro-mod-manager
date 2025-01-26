@@ -10,7 +10,9 @@
 	onMount(() => {
 		const init = async () => {
 			try {
-				const existingPath = await invoke("check_existing_installation");
+				const existingPath = await invoke(
+					"check_existing_installation",
+				);
 				if (existingPath) {
 					await goto("/main", { replaceState: true });
 				}
@@ -269,4 +271,3 @@
 		height: 100%;
 	}
 </style>
-

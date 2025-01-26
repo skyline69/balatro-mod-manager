@@ -149,3 +149,47 @@ impl Database {
         Ok(())
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn create_memory_db() -> Result<Database> {
+        let conn = Connection::open_in_memory()?;
+        Database::initialize_database(&conn)?;
+        Ok(Database { conn })
+    }
+
+    #[test]
+    fn test_installed_mods_crud() -> Result<()> {
+        let db = create_memory_db()?;
+        
+        // Test create
+        db.add_installed_mod("TestMod", "/path/to/mod")?;
+        let mods = db.get_installed_mods()?;
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].name, "TestMod");
+
+        // Test delete
+        db.remove_installed_mod("TestMod")?;
+        assert!(db.get_installed_mods()?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_installation_path_management() -> Result<()> {
+        let db = create_memory_db()?;
+        
+        assert!(db.get_installation_path()?.is_none());
+        db.set_installation_path("/games/balatro")?;
+        assert_eq!(db.get_installation_path()?, Some("/games/balatro".into()));
+        
+        db.remove_installation_path()?;
+        assert!(db.get_installation_path()?.is_none());
+
+        Ok(())
+    }
+}

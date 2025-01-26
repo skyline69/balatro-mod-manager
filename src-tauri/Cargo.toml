@@ -31,6 +31,16 @@ tauri-plugin-fs = "2"
 log = "0.4.25"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 
+[dev-dependencies]
+tempfile = "3.12.0"
+scopeguard = "1.2.0"
+mockito = "1.3.0"
+tokio-test = "0.4.4"
+test-case = "3.3.1"
+assert_fs = "1.0.13"
+predicates = "3.1.0"
+
+
 [[bin]]
 name = "BMM"
 path = "src/main.rs"
