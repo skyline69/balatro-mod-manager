@@ -41,12 +41,7 @@ jobs:
             ~/.cargo/git
             target
             src-tauri/bmm-lib/../lovely-injector/target  # Cache lovely-injector's target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/bmm-lib/Cargo.lock', 'src-tauri/bmm-lib/../lovely-injector/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run tests
-        
-        run: |
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            cargo build --release --manifest-path=../lovely-injector/Cargo.toml
-          fi
-          cargo test -p bmm-lib -- --test-threads=1
+        run: cargo test -p bmm-lib -- --test-threads=1
