@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -38,7 +40,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            src-tauri/bmm-lib/../lovely-injector/target  # Cache lovely-injector's target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/bmm-lib/Cargo.lock', 'src-tauri/bmm-lib/../lovely-injector/Cargo.lock') }}
       
       - name: Run tests
-        run: cargo test -p bmm-lib -- --test-threads=1
+        
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            cargo build --release --manifest-path=../lovely-injector/Cargo.toml
+          fi
+          cargo test -p bmm-lib -- --test-threads=1
