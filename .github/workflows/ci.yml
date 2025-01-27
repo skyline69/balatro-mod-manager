@@ -47,7 +47,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           cd ../lovely-injector
-          cargo build --release
+          SKIP_BUILD_SCRIPT=1 cargo build --release
       
       - name: Run tests
         run: cargo test -p bmm-lib -- --test-threads=1
