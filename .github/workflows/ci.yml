@@ -40,7 +40,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            src-tauri/bmm-lib/../lovely-injector/target  # Cache lovely-injector's target
+            src-tauri/bmm-lib/../lovely-injector/target/release  # Cache lovely-injector's target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Run tests
