@@ -7,10 +7,16 @@ pub struct TestEnv {
 
 impl TestEnv {
     pub fn new() -> Self {
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = match tempdir() {
+            Ok(dir) => dir,
+            Err(e) => panic!("Failed to create temporary directory: {}", e),
+        }
         // Setup environment variables
         std::env::set_var("BMM_TEST_MODE", "1");
-        std::env::set_var("BMM_TEST_DIR", temp_dir.path().to_str().unwrap());
+        std::env::set_var("BMM_TEST_DIR", match temp_dir.path().to_str() {
+            Some(path) => path,
+            None => panic!("Failed to convert temporary directory path to string"),
+        });
         Self { temp_dir }
     }
 }

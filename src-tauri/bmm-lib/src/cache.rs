@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -8,6 +7,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::errors::AppError;
 
 const CACHE_DURATION: u64 = 15 * 60; // 15 minutes in seconds
 
@@ -18,7 +18,7 @@ struct CacheHeader {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ModCache {
+struct ModCache {
     header: CacheHeader,
     mods: Vec<Mod>,
 }
@@ -78,58 +78,83 @@ impl From<i32> for Category {
     }
 }
 
-pub fn clear_cache() -> Result<(), String> {
+pub fn clear_cache() -> Result<(), AppError> {
     let cache_dir = dirs::cache_dir()
-        .ok_or("Could not find cache directory")?
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager");
 
     // Delete mods cache
     let mods_cache = cache_dir.join("mods.cache.bin.gz");
     if mods_cache.exists() {
         std::fs::remove_file(&mods_cache)
-            .map_err(|e| format!("Failed to remove mods cache: {}", e))?;
+            .map_err(|e| AppError::FileWrite {
+                path: mods_cache,
+                source: e.to_string(),
+            })?;
     }
 
     // Delete version caches
-    let version_caches = vec![
-        "versions-steamodded.cache.bin.gz",
-        "versions-talisman.cache.bin.gz",
-    ];
-    for file in version_caches {
-        let path = cache_dir.join(file);
-        if path.exists() {
-            std::fs::remove_file(&path).map_err(|e| format!("Failed to remove {}: {}", file, e))?;
-        }
-    }
-
-    Ok(())
+    ["versions-steamodded.cache.bin.gz", "versions-talisman.cache.bin.gz"]
+        .into_iter()
+        .try_for_each(|file| {
+            let path = cache_dir.join(file);
+            if path.exists() {
+                std::fs::remove_file(&path)
+                    .map_err(|e| AppError::FileWrite {
+                        path: path.clone(),
+                        source: e.to_string(),
+                    })
+            } else {
+                Ok(())
+            }
+        })
 }
 
-// Add to your existing cache module
-pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<()> {
+pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), AppError> {
     let mut path = dirs::cache_dir()
-        .context("Failed to get cache directory")?
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager");
 
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path)
+        .map_err(|e| AppError::DirCreate {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
+
     path.push(format!("versions-{}.cache.bin.gz", mod_type));
 
-    let mut encoder = GzEncoder::new(File::create(&path)?, Compression::default());
+    let file = File::create(&path)
+        .map_err(|e| AppError::FileWrite {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
+
+    let mut encoder = GzEncoder::new(file, Compression::default());
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| AppError::SystemTime(e.to_string()))?
+        .as_secs();
+
     let cache = VersionCache {
         header: CacheHeader {
             version: 1,
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+            timestamp,
         },
         versions: versions.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache)?;
+    bincode::serialize_into(&mut encoder, &cache)
+        .map_err(|e| AppError::Serialization {
+            format: "bincode".into(),
+            source: e.to_string(),
+        })?;
+
     Ok(())
 }
 
-pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>> {
+pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>, AppError> {
     let path = dirs::cache_dir()
-        .context("Failed to get cache directory")?
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager")
         .join(format!("versions-{}.cache.bin.gz", mod_type));
 
@@ -139,16 +164,23 @@ pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>> {
     };
 
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-    let decoder = GzDecoder::new(buffer.as_slice());
+    file.read_to_end(&mut buffer)
+        .map_err(|e| AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
 
+    let decoder = GzDecoder::new(buffer.as_slice());
     let cache: VersionCache = match bincode::deserialize_from(decoder) {
         Ok(c) => c,
         Err(_) => return Ok(None),
     };
 
-    // Validate cache
-    let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| AppError::SystemTime(e.to_string()))?
+        .as_secs();
+
     if current_time - cache.header.timestamp > CACHE_DURATION {
         return Ok(None);
     }
@@ -156,40 +188,59 @@ pub fn load_versions_cache(mod_type: &str) -> Result<Option<Vec<String>>> {
     Ok(Some(cache.versions))
 }
 
-// Add these structs to cache.rs
 #[derive(Serialize, Deserialize)]
 struct VersionCache {
     header: CacheHeader,
     versions: Vec<String>,
 }
 
-pub fn get_cache_path() -> Result<PathBuf> {
+pub fn get_cache_path() -> Result<PathBuf, AppError> {
     let mut path = dirs::cache_dir()
-        .context("Failed to get cache directory")?
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager");
 
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path)
+        .map_err(|e| AppError::DirCreate {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
+
     path.push("mods.cache.bin.gz");
     Ok(path)
 }
 
-pub fn save_cache(mods: &[Mod]) -> Result<()> {
+pub fn save_cache(mods: &[Mod]) -> Result<(), AppError> {
     let path = get_cache_path()?;
-    let mut encoder = GzEncoder::new(File::create(&path)?, Compression::default());
+    let file = File::create(&path)
+        .map_err(|e| AppError::FileWrite {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
+
+    let mut encoder = GzEncoder::new(file, Compression::default());
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| AppError::SystemTime(e.to_string()))?
+        .as_secs();
 
     let cache = ModCache {
         header: CacheHeader {
             version: 1,
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+            timestamp,
         },
         mods: mods.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache)?;
+    bincode::serialize_into(&mut encoder, &cache)
+        .map_err(|e| AppError::Serialization {
+            format: "bincode".into(),
+            source: e.to_string(),
+        })?;
+
     Ok(())
 }
 
-pub fn load_cache() -> Result<Option<(Vec<Mod>, u64)>> {
+pub fn load_cache() -> Result<Option<(Vec<Mod>, u64)>, AppError> {
     let path = get_cache_path()?;
     let mut file = match File::open(&path) {
         Ok(f) => f,
@@ -197,7 +248,11 @@ pub fn load_cache() -> Result<Option<(Vec<Mod>, u64)>> {
     };
 
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    file.read_to_end(&mut buffer)
+        .map_err(|e| AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        })?;
 
     let decoder = GzDecoder::new(buffer.as_slice());
     let cache: ModCache = match bincode::deserialize_from(decoder) {
@@ -205,13 +260,15 @@ pub fn load_cache() -> Result<Option<(Vec<Mod>, u64)>> {
         Err(_) => return Ok(None),
     };
 
-    // Validate cache version
     if cache.header.version != 1 {
         return Ok(None);
     }
 
-    // Check expiration
-    let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| AppError::SystemTime(e.to_string()))?
+        .as_secs();
+
     if current_time - cache.header.timestamp > CACHE_DURATION {
         return Ok(None);
     }
@@ -228,25 +285,22 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let original_cache = std::env::var_os("XDG_CACHE_HOME");
 
-        // Set test cache location
         std::env::set_var("XDG_CACHE_HOME", temp_dir.path());
-
         let result = test(temp_dir.path().to_path_buf());
-
-        // Restore original env
+        
         if let Some(val) = original_cache {
             std::env::set_var("XDG_CACHE_HOME", val);
         } else {
             std::env::remove_var("XDG_CACHE_HOME");
         }
-
+        
         result
     }
 
     #[test]
-    fn test_mod_cache_lifecycle() -> Result<()> {
-        with_temp_cache(|_cache_dir| {
-            let test_mods = vec![Mod {
+    fn test_mod_cache_lifecycle() -> Result<(), AppError> {
+        with_temp_cache(|_| {
+            let test_mod = Mod {
                 title: "Test Mod".into(),
                 description: "Test Description".into(),
                 image: "test.png".into(),
@@ -262,15 +316,15 @@ mod tests {
                 publisher: "Test".into(),
                 repo: "test/test".into(),
                 download_url: "https://test.com/mod.zip".into(),
-            }];
+            };
 
-            // Test save and load
-            save_cache(&test_mods)?;
+            save_cache(&[test_mod.clone()])?;
             let loaded = load_cache()?.expect("Should load cache");
+            
             assert_eq!(loaded.0.len(), 1);
             assert_eq!(loaded.0[0].title, "Test Mod");
-
             Ok(())
         })
     }
 }
+
