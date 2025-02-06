@@ -18,13 +18,13 @@ jobs:
     defaults:
       run:
         working-directory: src-tauri/bmm-lib
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -32,7 +32,14 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
           components: rustfmt, clippy
-      
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev pkg-config
+          echo "PKG_CONFIG_PATH=$(pkg-config --variable pc_path pkg-config | awk -F: '{print $1}')" >> $GITHUB_ENV
+
       - name: Cache cargo dependencies
         uses: actions/cache@v3
         with:
@@ -48,6 +55,6 @@ jobs:
         run: |
           cd ../lovely-injector
           SKIP_BUILD_SCRIPT=1 cargo build --release
-      
+
       - name: Run tests
         run: cargo test -p bmm-lib -- --test-threads=1
