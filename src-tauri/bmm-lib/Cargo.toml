@@ -32,7 +32,7 @@ rstest = "0.24.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52.0"
-tasklist = "0.2.15"
+sysinfo = "0.33.1"
 
 [target.'cfg(unix)'.dependencies]
 libproc = "0.14.10"

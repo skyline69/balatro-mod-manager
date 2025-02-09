@@ -11,6 +11,9 @@ use std::path::PathBuf;
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
+#[cfg(target_os = "windows")]
+use sysinfo::{System};
+
 
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
@@ -101,8 +104,11 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
 pub fn is_steam_running() -> bool {
     #[cfg(target_os = "windows")]
     {
-        use tasklist::find_process_id_by_name;
-        unsafe { !find_process_id_by_name("steam.exe").is_empty() }
+        let system = System::new_all();
+        let x= system.processes_by_exact_name(std::ffi::OsStr::new("steam.exe"))
+            .next()
+            .is_some();
+        x
     }
 
     #[cfg(target_family = "unix")]
@@ -157,8 +163,11 @@ pub fn get_installed_mods() -> Vec<String> {
 pub fn is_balatro_running() -> bool {
     #[cfg(target_os = "windows")]
     {
-        use tasklist::find_process_id_by_name;
-        unsafe { !find_process_id_by_name("Balatro.exe").is_empty() }
+        let system = System::new_all();
+        let x = system.processes_by_exact_name(std::ffi::OsStr::new("Balatro.exe"))
+            .next()
+            .is_some();
+        x
     }
 
     #[cfg(target_family = "unix")]

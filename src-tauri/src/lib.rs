@@ -10,21 +10,16 @@ use bmm_lib::cache;
 use bmm_lib::cache::Mod;
 use bmm_lib::database::Database;
 use bmm_lib::database::InstalledMod;
-use bmm_lib::errors::AppError;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
-use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use std::time::SystemTime;
 
 use std::process::Command;
 
 use tauri::Manager;
-
-fn map_error<T>(result: Result<T, AppError>) -> Result<T, String> {
-    result.map_err(|e| e.to_string())
-}
 
 // Create a state s;tructure to hold the database
 struct AppState {
@@ -43,7 +38,7 @@ async fn check_balatro_running() -> bool {
 
 #[tauri::command]
 async fn save_versions_cache(mod_type: String, versions: Vec<String>) -> Result<(), String> {
-    map_error(cache::save_versions_cache(&mod_type, &versions))
+    cache::save_versions_cache(&mod_type, &versions).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -53,14 +48,10 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
             res.map(|versions| {
                 (
                     versions,
-                    match SystemTime::now().duration_since(UNIX_EPOCH) {
-                        Ok(dur) => dur,
-                        Err(e) => {
-                            log::error!("Failed to get current time: {}", e);
-                            std::process::exit(1);
-                        }
-                    }
-                    .as_secs(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
                 )
             })
         })
@@ -69,108 +60,94 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
 
 #[tauri::command]
 async fn save_mods_cache(mods: Vec<Mod>) -> Result<(), String> {
-    map_error(cache::save_cache(&mods))
-}
-
-#[tauri::command]
-async fn clear_cache() -> Result<(), String> {
-    map_error(cache::clear_cache())
+    cache::save_cache(&mods).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
-    map_error(cache::load_cache())
+    cache::load_cache().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
+        .ok_or("Could not find config directory")?
         .join("Balatro")
         .join("Mods");
 
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    let installed_mods = db.get_installed_mods()?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
 
-    let entries = std::fs::read_dir(&mod_dir).map_err(|e| AppError::FileRead {
-        path: mod_dir.clone(),
-        source: e.to_string(),
-    })?;
-
+    let entries = std::fs::read_dir(&mod_dir).map_err(|e| e.to_string())?;
     for entry in entries {
-        let entry = entry.map_err(|e| AppError::FileRead {
-            path: mod_dir.clone(),
-            source: e.to_string(),
-        })?;
+        let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| AppError::InvalidState("Invalid filename".to_string()))?;
+            .ok_or("Invalid name")?;
 
+        // Skip .lovely and lovely
         if name.contains(".lovely") || name.contains("lovely") {
             continue;
         }
 
-        let ft = entry.file_type().map_err(|e| AppError::FileRead {
-            path: path.clone(),
-            source: e.to_string(),
-        })?;
-
-        match (ft.is_dir(), ft.is_file()) {
-            (true, _) => {
-                if !installed_mods.iter().any(|m| m.path.contains(name)) {
-                    std::fs::remove_dir_all(&path).map_err(|e| AppError::FileWrite {
-                        path: path.clone(),
-                        source: e.to_string(),
-                    })?;
+        match entry.file_type().map_err(|e| e.to_string())? {
+            // Handle directories
+            ft if ft.is_dir() => {
+                let mod_exists = installed_mods.iter().any(|m| m.path.contains(name));
+                if !mod_exists {
+                    log::info!("Removing untracked mod directory: {}", name);
+                    std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
                 }
             }
-            (_, true) => {
-                if !installed_mods.iter().any(|m| m.path.contains(name)) {
-                    std::fs::remove_file(&path).map_err(|e| AppError::FileWrite {
-                        path: path.clone(),
-                        source: e.to_string(),
-                    })?;
+            // Handle files
+            ft if ft.is_file() => {
+                let mod_exists = installed_mods.iter().any(|m| m.path.contains(name));
+                if !mod_exists {
+                    log::info!("Removing untracked mod file: {}", name);
+                    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
                 }
             }
+            // Skip other types (symlinks, etc.)
             _ => continue,
         }
     }
+
     Ok(())
 }
 
+// Add launch command
 #[tauri::command]
 async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
     let path_str = db
-        .get_installation_path()?
-        .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?;
-    let path = PathBuf::from(path_str);
+        .get_installation_path()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No Balatro installation path set".to_string())?;
+
+    let path = PathBuf::from(&path_str);
 
     #[cfg(target_os = "macos")]
     {
-        let lovely_path = map_error(ensure_lovely_exists())?;
-        let mut command = Command::new(path.join("Balatro.app/Contents/MacOS/love"));
-        command
-            .env("DYLD_INSERT_LIBRARIES", lovely_path)
-            .current_dir(&path);
+        let lovely_path = ensure_lovely_exists()?;
+        let balatro_exe = path.join("Balatro.app/Contents/MacOS/love");
+
+        let mut command = Command::new(&balatro_exe);
+        command.env("DYLD_INSERT_LIBRARIES", &lovely_path);
+        command.current_dir(&path);
+
         command
             .spawn()
-            .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+            .map_err(|e| format!("Failed to launch Balatro: {}", e))?;
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        Command::new(&path)
+        let mut command = Command::new(&path);
+        command
             .spawn()
-            .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+            .map_err(|e| format!("Failed to launch Balatro: {}", e))?;
     }
 
     Ok(())
@@ -178,51 +155,42 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
 #[tauri::command]
 async fn check_mod_installation(mod_type: String) -> Result<bool, String> {
-    let db = map_error(Database::new())?;
-    let installed_mods = map_error(db.get_installed_mods())?;
+    let db = Database::new().map_err(|e| e.to_string())?;
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
 
-    Ok(match mod_type.as_str() {
-        "Steamodded" => installed_mods.iter().any(|m| m.name == "Steamodded"),
-        "Talisman" => installed_mods.iter().any(|m| m.name == "Talisman"),
-        _ => return Err(AppError::InvalidState("Invalid mod type".to_string()).to_string()),
-    })
+    match mod_type.as_str() {
+        "Steamodded" => Ok(installed_mods.iter().any(|m| m.name == "Steamodded")),
+        "Talisman" => Ok(installed_mods.iter().any(|m| m.name == "Talisman")),
+        _ => Err("Invalid mod type".to_string()),
+    }
 }
 
 #[tauri::command]
 async fn check_existing_installation(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<String>, String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    if let Some(path) = db.get_installation_path()? {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    if let Some(path) = db.get_installation_path().map_err(|e| e.to_string())? {
+        // Verify the path still exists and is valid
         let path_buf = PathBuf::from(&path);
         if bmm_lib::balamod::Balatro::from_custom_path(path_buf).is_some() {
-            Ok(Some(path))
+            return Ok(Some(path));
         } else {
-            map_error(db.remove_installation_path())?;
-            Ok(None)
+            db.remove_installation_path().map_err(|e| e.to_string())?;
         }
-    } else {
-        Ok(None)
     }
+    Ok(None)
 }
-
 #[tauri::command]
 async fn install_mod(url: String) -> Result<PathBuf, String> {
-    map_error(bmm_lib::installer::install_mod(url).await)
+    bmm_lib::installer::install_mod(url).await
 }
-
 #[tauri::command]
 async fn get_installed_mods_from_db(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<InstalledMod>, String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    map_error(db.get_installed_mods())
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_installed_mods().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -232,7 +200,8 @@ async fn add_installed_mod(
     path: String,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    map_error(db.add_installed_mod(&name, &path))
+    db.add_installed_mod(&name, &path)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -241,24 +210,21 @@ async fn remove_installed_mod(
     name: String,
     path: String,
 ) -> Result<(), String> {
-    bmm_lib::installer::uninstall_mod(PathBuf::from(path))?;
+    bmm_lib::installer::uninstall_mod(PathBuf::from(path));
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    map_error(db.remove_installed_mod(&name))
+    db.remove_installed_mod(&name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn get_balatro_path(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    map_error(db.get_installation_path())
+    db.get_installation_path().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn set_balatro_path(state: tauri::State<'_, AppState>, path: String) -> Result<(), String> {
-    let db = match state.db.lock() {
-        Ok(db) => db,
-        Err(e) => return Err(e.to_string()),
-    };
-    map_error(db.set_installation_path(&path))
+    let db = state.db.lock().unwrap();
+    db.set_installation_path(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -266,7 +232,8 @@ async fn find_steam_balatro(state: tauri::State<'_, AppState>) -> Result<Vec<Str
     let balatros = find_balatros();
     if let Some(path) = balatros.first() {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        map_error(db.set_installation_path(&path.path.to_string_lossy()))?;
+        db.set_installation_path(&path.path.to_string_lossy())
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(balatros
@@ -315,13 +282,7 @@ async fn install_talisman_version(version: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn verify_path_exists(path: String) -> bool {
-    match std::fs::exists(PathBuf::from(path)) {
-        Ok(exists) => exists,
-        Err(e) => {
-            log::error!("Failed to check path existence: {}", e);
-            false
-        }
-    }
+    std::fs::exists(PathBuf::from(path)).unwrap()
 }
 
 #[tauri::command]
@@ -334,7 +295,8 @@ async fn check_custom_balatro(
 
     if is_valid {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        map_error(db.set_installation_path(&path.to_string_lossy()))?;
+        db.set_installation_path(&path.to_string_lossy())
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(is_valid)
@@ -342,7 +304,7 @@ async fn check_custom_balatro(
 
 #[tauri::command]
 async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: String) {
-    let _popup = match WebviewWindowBuilder::new(
+    let _popup = WebviewWindowBuilder::new(
         &app,
         "image_popup",
         WebviewUrl::App(format!("image-popup.html?image={}", image_url).into()),
@@ -350,13 +312,8 @@ async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: Strin
     .title(title)
     .inner_size(800.0, 600.0)
     .center()
-    .build() {
-        Ok(popup) => popup,
-        Err(e) => {
-            log::error!("Failed to open image popup: {}", e);
-            return;
-        }
-    };
+    .build()
+    .unwrap();
 }
 
 // #[tauri::command]
@@ -377,26 +334,26 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Get app handle first
-            // let app_handle = app.handle();
+            let app_handle = app.handle();
 
             // Initialize database with error handling
-            let db = map_error(Database::new())?;
-
+            let db =
+                Database::new().map_err(|e| format!("Failed to initialize database: {}", e))?;
             app.manage(AppState { db: Mutex::new(db) });
 
-            let app_dir = app
+            // Create required directories using path resolver
+            let app_dir = app_handle
                 .path()
                 .app_data_dir()
-                .map_err(|_| AppError::DirNotFound(PathBuf::from("app data directory")))?;
+                .map_err(|e| format!("Failed to get app data directory: {}", e))?;
 
-            std::fs::create_dir_all(&app_dir).map_err(|e| AppError::DirCreate {
-                path: app_dir.clone(),
-                source: e.to_string(),
-            })?;
+            std::fs::create_dir_all(&app_dir)
+                .map_err(|e| format!("Failed to create app directory: {}", e))?;
 
             #[cfg(target_os = "macos")]
             {
-                map_error(lovely::ensure_lovely_exists())?;
+                lovely::ensure_lovely_exists()
+                    .map_err(|e| format!("Failed to setup lovely: {}", e))?;
             }
 
             #[cfg(debug_assertions)]
@@ -430,8 +387,7 @@ pub fn run() {
             save_mods_cache,
             load_mods_cache,
             save_versions_cache,
-            load_versions_cache,
-            clear_cache
+            load_versions_cache
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {
