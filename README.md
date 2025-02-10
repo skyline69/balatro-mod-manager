@@ -18,6 +18,12 @@ The Balatro Mod Manager by _Skyline_.
 - [Make](https://www.gnu.org/software/make/) (for running make commands)
 
 ## Automatic Installation
+### For Windows
+open Powershell & run this command:
+```powershell
+iwr https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.ps1 -useb | iex
+```
+
 ### For macOS
 run this command:
 ```bash
