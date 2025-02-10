@@ -1,4 +1,3 @@
-# Balatro Mod Manager
 ![Balatro Mod Manager](images/title.svg)
 
 Balatro Mod Manager by Skyline.
