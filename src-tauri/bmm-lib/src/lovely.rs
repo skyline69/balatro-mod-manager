@@ -5,6 +5,9 @@ use libloading::Library;
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(target_os = "windows")]
+pub const EMBEDDED_DLL: &[u8] = include_bytes!("../../resources/version.dll");
+
 pub fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
     #[cfg(target_os = "macos")]
     {
@@ -37,10 +40,24 @@ pub fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
         Ok(lovely_path)
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        // Get Balatro installation paths for validation
+        let balatro_paths = crate::finder::get_balatro_paths();
+        if balatro_paths.is_empty() {
+            return Err(AppError::DirNotFound(PathBuf::from("Balatro installation")));
+        }
+
+        // Return the path to the first valid installation
+        return Ok(balatro_paths[0].join("Balatro.exe"));
+    }
+
+    // #[cfg(not(target_os = "macos"))]
+    // if not macOS or Windows
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err(AppError::InvalidState(
-            "Lovely injection is only supported on macOS".into(),
+            "Lovely injection is not supported on this platform.".into(),
         ))
     }
 }
