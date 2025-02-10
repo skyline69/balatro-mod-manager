@@ -1,6 +1,10 @@
 ![Balatro Mod Manager](images/title.svg)
 
-Balatro Mod Manager by Skyline.
+# Startup Screen
+![first cover](images/cover_1.png)
+
+# Home Screem
+![second cover](images/cover_2.png)
 
 ## Prerequisites
 
