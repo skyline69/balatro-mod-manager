@@ -85,10 +85,6 @@ catch {
     exit 1
 }
 
-# Cleanup
-Write-Host "6. Cleaning up..." -ForegroundColor $YELLOW
-Remove-Item $BUILD_DIR -Recurse -Force
-
 Write-Host "Installation completed successfully!" -ForegroundColor $GREEN
 Write-Host ""
 Write-Host "Note: Windows SmartScreen might block first execution -`nright-click the .exe and select 'Run anyway'" -ForegroundColor $YELLOW
