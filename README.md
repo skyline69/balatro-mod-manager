@@ -7,6 +7,9 @@ The Balatro Mod Manager by _Skyline_.
 # Home Screen
 ![second cover](images/cover_2.png)
 
+
+![Installation](images/Installation.svg)
+
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (for the backend)
