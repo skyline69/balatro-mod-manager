@@ -26,10 +26,10 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
 
 ## Manual Installation
 
-1. Clone the repository:
+1. Clone the repository & install deno's dependencies:
     ```sh
     git clone https://github.com/skyline69/balatro-mod-manager.git
-    cd balatro-mod-manager
+    cd balatro-mod-manager && deno install
     ```
 
 2. Install dependencies for the Svelte frontend:
