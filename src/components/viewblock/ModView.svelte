@@ -336,6 +336,17 @@
 		}
 	};
 
+	async function handleMarkdownClick(event: MouseEvent) {
+		const anchor = (event.target as HTMLElement).closest("a");
+		if (anchor && anchor.href.startsWith("http")) {
+			event.preventDefault();
+			try {
+				await open(anchor.href);
+			} catch (error) {
+				console.error("Failed to open link:", error);
+			}
+		}
+	}
 	const isModInstalled = async (mod: Mod) => {
 		await getAllInstalledMods();
 		const status = installedMods.some((m) => m.name === mod.title);
@@ -548,7 +559,19 @@
 				</div>
 
 				<div class="right-column">
-					<div class="description">{@html renderedDescription}</div>
+					<div
+						class="description"
+						role="button"
+						tabindex="0"
+						on:click|self={handleMarkdownClick}
+						on:keydown|self={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								handleMarkdownClick(e);
+							}
+						}}
+					>
+						{@html renderedDescription}
+					</div>
 				</div>
 			</div>
 		</div>
@@ -931,5 +954,17 @@
 		background: rgba(133, 35, 27, 0.9);
 		color: #f4eee0;
 		padding: 0.75rem;
+	}
+
+	.description :global(a) {
+		color: #56a786;
+		text-decoration: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.description :global(a:hover) {
+		text-decoration: underline;
+		filter: brightness(1.2);
 	}
 </style>
