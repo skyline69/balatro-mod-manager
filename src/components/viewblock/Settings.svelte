@@ -4,16 +4,25 @@
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
-	import WarningPopup from "../WarningPopup.svelte";
-    import { showWarningPopup } from "../../stores/modStore";
+	import { showWarningPopup } from "../../stores/modStore";
 	let isReindexing = false;
 	let isClearingCache = false;
 	let isConsoleEnabled = false;
+
 	export async function performReindexMods() {
 		isReindexing = true;
 		try {
-			await invoke("refresh_mods_folder");
-			addMessage("Successfully re-indexed mods!", "success");
+			const hasUntracked = await invoke<boolean>("check_untracked_mods");
+
+			if (hasUntracked) {
+				showWarningPopup.set(true);
+			} else {
+				await invoke("refresh_mods_folder");
+				addMessage(
+					"Mods re-indexed - no untracked files found",
+					"success",
+				);
+			}
 		} catch (error) {
 			addMessage("Failed to re-index mods: " + error, "error");
 		} finally {
@@ -21,16 +30,20 @@
 		}
 	}
 
+	async function confirmReindex() {
+		try {
+			await invoke("refresh_mods_folder");
+			addMessage("Mods re-indexed successfully", "success");
+		} catch (error) {
+			addMessage("Failed to re-index mods: " + error, "error");
+		}
+		showWarningPopup.set(false);
+	}
+
 	function reindexModsWithWarning() {
 		showWarningPopup.set(true);
 	} // Called when the popup's confirm button is pressed
-	function confirmReindex() {
-		showWarningPopup.set(false);
-		performReindexMods();
-	} // Called when the popup's cancel button is pressed
-	function cancelReindex() {
-		showWarningPopup.set(false);
-	}
+
 	async function clearCache() {
 		isClearingCache = true;
 		try {
@@ -91,10 +104,11 @@
 		</p>
 
 		<h3>Mods</h3>
+
 		<div class="mods-settings">
 			<button
 				class="reindex-button"
-				on:click={reindexModsWithWarning}
+				on:click={performReindexMods}
 				disabled={isReindexing}
 			>
 				{#if isReindexing}

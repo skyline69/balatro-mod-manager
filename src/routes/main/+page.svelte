@@ -9,6 +9,8 @@
 	import type { DependencyCheck } from "../../stores/modStore";
 	import { showWarningPopup } from "../../stores/modStore";
 	import { performReindexMods } from "../../utils/performReindexMods";
+	import { invoke } from "@tauri-apps/api/core";
+	import { addMessage } from "$lib/stores";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -35,12 +37,13 @@
 		showRequiresPopup = true;
 	}
 
-	function confirmReindex() {
-		performReindexMods();
-		showWarningPopup.set(false);
-	}
-
-	function cancelReindex() {
+	async function confirmReindex() {
+		try {
+			await invoke("refresh_mods_folder");
+			addMessage("Mods re-indexed successfully", "success");
+		} catch (error) {
+			addMessage("Failed to re-index mods: " + error, "error");
+		}
 		showWarningPopup.set(false);
 	}
 </script>
@@ -92,11 +95,12 @@
 		requiresSteamodded={modRequirements.steamodded}
 		requiresTalisman={modRequirements.talisman}
 	/>
+
 	<WarningPopup
 		visible={$showWarningPopup}
-		message="Warning: All mods in the Mods directory that are not tracked in the database will be deleted. Are you sure you want to proceed?"
+		message="Untracked mods detected! All mods in the Mods directory that are not tracked in the database will be deleted. Are you sure you want to proceed?"
 		onConfirm={confirmReindex}
-		onCancel={cancelReindex}
+		onCancel={() => showWarningPopup.set(false)}
 	/>
 
 	<div class="version-text">v0.1.0</div>

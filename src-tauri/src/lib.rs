@@ -106,6 +106,46 @@ async fn set_lovely_console_status(
 }
 
 #[tauri::command]
+async fn check_untracked_mods(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let mod_dir = dirs::config_dir()
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
+        .join("Balatro")
+        .join("Mods");
+
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    let installed_mods = db.get_installed_mods()?;
+
+    let entries = match std::fs::read_dir(&mod_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => {
+            return Err(AppError::FileRead {
+                path: mod_dir,
+                source: e.to_string(),
+            }
+            .to_string())
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) if !name.contains("lovely") => name,
+            _ => continue,
+        };
+
+        if !installed_mods.iter().any(|m| m.path.contains(name)) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+#[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let mod_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
@@ -531,6 +571,7 @@ pub fn run() {
             load_versions_cache,
             set_lovely_console_status,
             get_lovely_console_status,
+            check_untracked_mods,
             clear_cache
         ])
         .run(tauri::generate_context!());
