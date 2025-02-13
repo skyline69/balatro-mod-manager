@@ -62,7 +62,7 @@ async fn load_versions_cache(mod_type: String) -> Result<Option<(Vec<String>, u6
                             std::process::exit(1);
                         }
                     }
-                        .as_secs(),
+                    .as_secs(),
                 )
             })
         })
@@ -184,17 +184,13 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         let exe_path = path.join("Balatro.exe");
         let dll_path = path.join("version.dll");
 
-        // At launch, if a version.dll already exists in the game directory, remove it.
-        if dll_path.exists() {
-           std::fs::remove_file(&dll_path)
-                .map_err(|e| format!("Failed to remove existing version.dll: {}", e))?;
-            log::debug!("Removed existing version.dll at {}", dll_path.display());
+        // At launch, if a version.dll doesn't exist in the game directory,create it.
+        if !dll_path.exists() {
+            // Write the embedded version.dll (replace lovely::EMBEDDED_DLL with your DLL's data) to the game folder.
+            std::fs::write(&dll_path, lovely::EMBEDDED_DLL)
+                .map_err(|e| format!("Failed to write version.dll: {}", e))?;
+            log::debug!("Written version.dll to {}", dll_path.display());
         }
-
-        // Write the embedded version.dll (replace lovely::EMBEDDED_DLL with your DLL's data) to the game folder.
-        std::fs::write(&dll_path, lovely::EMBEDDED_DLL)
-            .map_err(|e| format!("Failed to write version.dll: {}", e))?;
-        log::debug!("Written version.dll to {}", dll_path.display());
 
         // Launch the game normally.
         let mut child = Command::new(&exe_path)
@@ -206,23 +202,21 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
         // Spawn a background thread that waits for the game process to exit.
         // Once the game is closed, remove the version.dll file.
-        std::thread::spawn(move || {
-            match child.wait() {
-                Ok(status) => {
-                    log::debug!("Balatro exited with status: {:?}", status);
-                    if let Err(e) = std::fs::remove_file(&dll_path) {
-                        log::error!(
-                            "Failed to remove version.dll after game exit at {}: {}",
-                            dll_path.display(),
-                            e
-                        );
-                    } else {
-                        log::debug!("Removed version.dll after game exit");
-                    }
+        std::thread::spawn(move || match child.wait() {
+            Ok(status) => {
+                log::debug!("Balatro exited with status: {:?}", status);
+                if let Err(e) = std::fs::remove_file(&dll_path) {
+                    log::error!(
+                        "Failed to remove version.dll after game exit at {}: {}",
+                        dll_path.display(),
+                        e
+                    );
+                } else {
+                    log::debug!("Removed version.dll after game exit");
                 }
-                Err(e) => {
-                    log::error!("Error waiting for Balatro process: {}", e);
-                }
+            }
+            Err(e) => {
+                log::error!("Error waiting for Balatro process: {}", e);
             }
         });
     }
@@ -401,10 +395,11 @@ async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: Strin
         "image_popup",
         WebviewUrl::App(format!("image-popup.html?image={}", image_url).into()),
     )
-        .title(title)
-        .inner_size(800.0, 600.0)
-        .center()
-        .build() {
+    .title(title)
+    .inner_size(800.0, 600.0)
+    .center()
+    .build()
+    {
         Ok(popup) => popup,
         Err(e) => {
             log::error!("Failed to open image popup: {}", e);
@@ -488,3 +483,4 @@ pub fn run() {
         std::process::exit(1);
     }
 }
+
