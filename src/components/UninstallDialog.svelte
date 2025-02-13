@@ -29,17 +29,9 @@
 					name: modName,
 					path: modPath,
 				});
-			} else {
-				await invoke("remove_installed_mod", {
-					name: modName,
-					path: modPath,
-				});
 			}
 
-			dispatch("uninstalled", {
-				success: true,
-				action: action || "single",
-			});
+			dispatch("uninstalled", { success: true });
 		} catch (e) {
 			dispatch("error", e);
 		} finally {
@@ -77,7 +69,7 @@
 							handleUninstall();
 						}}
 					>
-						Uninstall All ({dependents.length + 1})
+						Uninstall All ({dependents.length})
 					</button>
 					<button
 						on:click={() => {

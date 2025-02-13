@@ -435,14 +435,19 @@ async fn remove_installed_mod(
     path: String,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let dependents = map_error(db.get_dependents(&name))?;
 
-    if !dependents.is_empty() {
-        return Err(format!(
-            "Cannot uninstall {}: {} dependent mods exist",
-            name,
-            dependents.len()
-        ));
+    // Only check dependencies for framework mods
+    let is_framework = name.to_lowercase() == "steamodded" || name.to_lowercase() == "talisman";
+
+    if is_framework {
+        let dependents = map_error(db.get_dependents(&name))?;
+        if !dependents.is_empty() {
+            return Err(format!(
+                "Use cascade_uninstall to remove {} with {} dependents",
+                name,
+                dependents.len()
+            ));
+        }
     }
 
     map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(path)))?;

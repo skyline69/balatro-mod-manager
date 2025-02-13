@@ -14,6 +14,7 @@
 		currentModView,
 		installationStatus,
 		loadingStates2 as loadingStates,
+        uninstallDialogStore,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -180,27 +181,44 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
+		const isCoreMod = ["steamodded", "talisman"].includes(
+			mod.title.toLowerCase(),
+		);
+
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name === mod.title,
 			);
-			if (!installedMod) {
-				console.error(`Mod "${mod.title}" not found in installed mods`);
-				console.log(installedMods);
-				return;
-			}
-			await invoke("remove_installed_mod", {
-				name: mod.title,
-				path: installedMod.path,
-			});
+			if (!installedMod) return;
 
-			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
+			if (isCoreMod) {
+				const dependents = await invoke<string[]>("get_dependents", {
+					modName: mod.title,
+				});
+
+				// Add this line to show the uninstall dialog
+				uninstallDialogStore.set({
+					show: true,
+					modName: mod.title,
+					modPath: installedMod.path,
+					dependents,
+				});
+			} else {
+				// Direct uninstall for non-core mods
+				await invoke("remove_installed_mod", {
+					name: mod.title,
+					path: installedMod.path,
+				});
+				installationStatus.update((s) => ({
+					...s,
+					[mod.title]: false,
+				}));
+			}
 		} catch (error) {
 			console.error("Failed to uninstall mod:", error);
 		}
 	};
-
 	const installMod = async (mod: Mod) => {
 		// Collect dependencies first
 		const dependencies = [];
@@ -261,7 +279,7 @@
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					dependencies: dependencies // Steamodded has no dependencies
+					dependencies: dependencies, // Steamodded has no dependencies
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
