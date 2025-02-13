@@ -64,6 +64,7 @@
 
 				<div class="actions">
 					<button
+						class="confirm-button"
 						on:click={() => {
 							action = "cascade";
 							handleUninstall();
@@ -72,6 +73,7 @@
 						Uninstall All ({dependents.length})
 					</button>
 					<button
+						class="force-button"
 						on:click={() => {
 							action = "force";
 							handleUninstall();
@@ -79,17 +81,20 @@
 					>
 						Force Remove Anyway
 					</button>
-					<button on:click={closeDialog}>Cancel</button>
+					<button class="cancel-button" on:click={closeDialog}>
+						Cancel
+					</button>
 				</div>
 			{:else}
 				<div class="actions">
 					<button
+						class="confirm-button"
 						on:click={() => {
 							action = null;
 							handleUninstall();
 						}}>Confirm</button
 					>
-					<button on:click={closeDialog}>Cancel</button>
+					<button on:click={closeDialog} class="force-button">Cancel</button>
 				</div>
 			{/if}
 		</div>
@@ -143,6 +148,10 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 
+	.dialog-content h2 {
+		text-align: center;
+	}
+
 	h2 {
 		color: #fdcf51;
 		font-size: 1.8rem;
@@ -189,10 +198,57 @@
 			background-color 0.2s ease;
 	}
 
+	.confirm-button {
+		background: #56a786; /* Green from your download button */
+		color: #f4eee0;
+		border: 2px solid #459373;
+	}
+
+	.confirm-button:hover {
+		background: #67b897;
+		transform: translateY(-2px);
+	}
+
+	.force-button {
+		background: #c14139; /* Red from delete button */
+		color: #f4eee0;
+		border: 2px solid #a13029;
+	}
+
+	.force-button:hover {
+		background: #d2524a;
+		transform: translateY(-2px);
+	}
+
+	.cancel-button {
+		background: #ea9600; /* Orange from categories button */
+		color: #f4eee0;
+		border: 2px solid #cc8400;
+	}
+
+	.cancel-button:hover {
+		background: #fca800;
+		transform: translateY(-2px);
+	}
+	.cancel-button:active,
+	.force-button:active,
+	.confirm-button:active {
+		transform: translateY(0);
+	}
+
+	/* Update the actions grid */
+	.actions {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: 1rem;
+		margin-top: 2rem;
+	}
+
 	@media (max-width: 768px) {
 		.dialog-content {
 			padding: 1.5rem;
 			width: 90%;
+			margin: 1rem;
 		}
 
 		h2 {
@@ -200,32 +256,75 @@
 			margin-bottom: 1rem;
 		}
 
-		li {
-			font-size: 0.95rem;
+		.dependency-list {
+			padding: 0.75rem;
+			margin: 0.75rem 0;
+		}
+
+		.dependency-list h3 {
+			font-size: 1.2rem;
+		}
+
+		.dependency-list li {
+			font-size: 1rem;
+			padding: 0.25rem 0;
 		}
 
 		button {
 			padding: 0.75rem 1rem;
-			font-size: 1rem;
+			font-size: 0.95rem;
 		}
 
 		.actions {
 			grid-template-columns: 1fr;
 			gap: 0.75rem;
+			margin-top: 1.5rem;
 		}
 	}
 
 	@media (max-width: 480px) {
 		.dialog-content {
 			padding: 1rem;
+			border-width: 1px;
 		}
 
 		h2 {
 			font-size: 1.3rem;
+			margin-bottom: 0.75rem;
+		}
+
+		.dependency-list h3 {
+			font-size: 1.1rem;
+		}
+
+		.dependency-list li {
+			font-size: 0.9rem;
+			gap: 0.5rem;
 		}
 
 		button {
+			padding: 0.6rem 0.8rem;
 			font-size: 0.9rem;
+		}
+
+		.actions {
+			gap: 0.5rem;
+			margin-top: 1rem;
+		}
+	}
+
+	@media (max-width: 360px) {
+		.dialog-content {
+			padding: 0.75rem;
+		}
+
+		h2 {
+			font-size: 1.2rem;
+		}
+
+		button {
+			font-size: 0.85rem;
+			padding: 0.5rem 0.7rem;
 		}
 	}
 </style>
