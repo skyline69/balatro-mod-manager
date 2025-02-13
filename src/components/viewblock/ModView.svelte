@@ -10,11 +10,12 @@
 		Github,
 	} from "lucide-svelte";
 	import { onMount } from "svelte";
+	import { open } from "@tauri-apps/plugin-shell";
 	import {
 		currentModView,
 		installationStatus,
 		loadingStates2 as loadingStates,
-        uninstallDialogStore,
+		uninstallDialogStore,
 	} from "../../stores/modStore";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
@@ -536,15 +537,13 @@
 					</div>
 
 					{#if mod.repo}
-						<a
-							href={mod.repo}
-							target="_blank"
-							rel="noopener noreferrer"
+						<button
+							on:click={() => open(mod.repo)}
 							class="repo-button"
 						>
 							<Github size={16} />
 							Repository
-						</a>
+						</button>
 					{/if}
 				</div>
 
@@ -907,6 +906,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		width: 100%;
+		height: 3rem;
 		padding: 0.75rem 1.5rem;
 		background: #2b3137;
 		color: #f4eee0;
