@@ -1,7 +1,7 @@
+use crate::errors::AppError;
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::PathBuf;
-use crate::errors::AppError;
 
 pub struct Database {
     conn: Connection,
@@ -20,8 +20,8 @@ impl Database {
         let storage_path = config_dir.join("Balatro").join("bmm_storage.db");
 
         let db_exists = storage_path.exists();
-        let conn = Connection::open(&storage_path)
-            .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+        let conn =
+            Connection::open(&storage_path).map_err(|e| AppError::DatabaseInit(e.to_string()))?;
 
         if !db_exists {
             Self::initialize_database(&conn)?;
@@ -76,14 +76,15 @@ impl Database {
     }
 
     pub fn remove_installed_mod(&self, name: &str) -> Result<(), AppError> {
-        self.conn.execute("DELETE FROM installed_mods WHERE name = ?1", [name])?;
+        self.conn
+            .execute("DELETE FROM installed_mods WHERE name = ?1", [name])?;
         Ok(())
     }
 
     pub fn get_installation_path(&self) -> Result<Option<String>, AppError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT value FROM settings WHERE setting = 'installation_path'",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'installation_path'")?;
         let mut rows = stmt.query([])?;
 
         if let Some(row) = rows.next()? {
@@ -107,6 +108,43 @@ impl Database {
             [],
         )?;
         Ok(())
+    }
+
+    fn enable_lovely_console(&self) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('lovely_console', 'enabled')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn disable_lovely_console(&self) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('lovely_console', 'disabled')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_lovely_console_status(&self, enabled: bool) -> Result<(), AppError> {
+        if enabled {
+            self.enable_lovely_console()
+        } else {
+            self.disable_lovely_console()
+        }
+    }
+
+    pub fn is_lovely_console_enabled(&self) -> Result<bool, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'lovely_console'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(row.get::<_, String>(0)? == "enabled")
+        } else {
+            Ok(false)
+        }
     }
 
     // fn get_setting(&self, setting: &str) -> Result<Option<String>, AppError> {
@@ -137,8 +175,8 @@ mod tests {
     use rusqlite::Connection;
 
     fn create_memory_db() -> Result<Database, AppError> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+        let conn =
+            Connection::open_in_memory().map_err(|e| AppError::DatabaseInit(e.to_string()))?;
         Database::initialize_database(&conn)?;
         Ok(Database { conn })
     }
@@ -146,7 +184,7 @@ mod tests {
     #[test]
     fn test_installed_mods_crud() -> Result<(), AppError> {
         let db = create_memory_db()?;
-        
+
         db.add_installed_mod("TestMod", "/path/to/mod")?;
         let mods = db.get_installed_mods()?;
         assert_eq!(mods.len(), 1);
@@ -161,15 +199,14 @@ mod tests {
     #[test]
     fn test_installation_path_management() -> Result<(), AppError> {
         let db = create_memory_db()?;
-        
+
         assert!(db.get_installation_path()?.is_none());
         db.set_installation_path("/games/balatro")?;
         assert_eq!(db.get_installation_path()?, Some("/games/balatro".into()));
-        
+
         db.remove_installation_path()?;
         assert!(db.get_installation_path()?.is_none());
 
         Ok(())
     }
 }
-

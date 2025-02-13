@@ -85,6 +85,27 @@ async fn load_mods_cache() -> Result<Option<(Vec<Mod>, u64)>, String> {
 }
 
 #[tauri::command]
+async fn get_lovely_console_status(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    map_error(db.is_lovely_console_enabled())
+}
+
+#[tauri::command]
+async fn set_lovely_console_status(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    map_error(db.set_lovely_console_status(enabled))
+}
+
+#[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let mod_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
@@ -154,29 +175,52 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
     let path_str = db
         .get_installation_path()?
         .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?;
+    let lovely_console_enabled = db.is_lovely_console_enabled()?;
     let path = PathBuf::from(path_str);
 
     #[cfg(target_os = "macos")]
     {
         let lovely_path = map_error(ensure_lovely_exists())?;
-        let mut command = Command::new(path.join("Balatro.app/Contents/MacOS/love"));
-        command
-            .env("DYLD_INSERT_LIBRARIES", lovely_path)
-            .current_dir(&path);
-        command
-            .spawn()
-            .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+        let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
+
+        if lovely_console_enabled {
+            // If the console is disabled, add the flag
+            let disable_arg = if !lovely_console_enabled {
+                " --disable-console"
+            } else {
+                ""
+            };
+            // Instead of using double quotes which cause conflicts in AppleScript,
+            // wrap the file paths in single quotes.
+            let command_line = format!(
+                "cd '{}' && DYLD_INSERT_LIBRARIES='{}' '{}'{}",
+                path.display(),
+                lovely_path.display(),
+                balatro_executable.display(),
+                disable_arg
+            );
+
+            // Construct the AppleScript command to run the command_line in Terminal.
+            let applescript = format!(
+                "tell application \"Terminal\" to do script \"{}\"",
+                command_line
+            );
+
+            Command::new("osascript")
+                .arg("-e")
+                .arg(applescript)
+                .spawn()
+                .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+        } else {
+            let mut command = Command::new(path.join("Balatro.app/Contents/MacOS/love"));
+            command
+                .env("DYLD_INSERT_LIBRARIES", lovely_path)
+                .current_dir(&path);
+            command
+                .spawn()
+                .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
+        }
     }
-
-    /*#[cfg(not(target_os = "macos"))]
-    {
-
-        let lovely_version_dll =  map_error(ensure_lovely_exists())?;
-        dbg!(&lovely_version_dll);
-        Command::new(path.join("Balatro.exe"))
-            .spawn()
-            .map_err(|e| AppError::ProcessExecution(e.to_string()))?;
-    }*/
 
     #[cfg(target_os = "windows")]
     {
@@ -193,11 +237,19 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         }
 
         // Launch the game normally.
-        let mut child = Command::new(&exe_path)
-            .current_dir(&path)
-            .arg("--disable-console")
-            .spawn()
-            .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+        if lovely_console_enabled {
+            let mut child = Command::new(&exe_path)
+                .current_dir(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+        } else {
+            let mut child = Command::new(&exe_path)
+                .current_dir(&path)
+                .arg("--disable-console")
+                .spawn()
+                .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+        }
+
         log::debug!("Launched Balatro from {}", exe_path.display());
 
         // Spawn a background thread that waits for the game process to exit.
@@ -475,6 +527,8 @@ pub fn run() {
             load_mods_cache,
             save_versions_cache,
             load_versions_cache,
+            set_lovely_console_status,
+            get_lovely_console_status,
             clear_cache
         ])
         .run(tauri::generate_context!());
@@ -483,4 +537,3 @@ pub fn run() {
         std::process::exit(1);
     }
 }
-

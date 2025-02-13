@@ -2,11 +2,28 @@
 	import PathSelector from "../PathSelector.svelte";
 	import { Settings2, RefreshCw } from "lucide-svelte";
 	import { addMessage } from "$lib/stores";
+	import { onMount } from "svelte";
 
 	import { invoke } from "@tauri-apps/api/core";
 
 	let isReindexing = false;
 	let isClearingCache = false;
+	let isConsoleEnabled = false;
+
+	async function handleConsoleChange() {
+		const newValue = !isConsoleEnabled;
+		try {
+			await invoke("set_lovely_console_status", { enabled: newValue });
+			isConsoleEnabled = newValue;
+			addMessage(
+				`Lovely Console ${newValue ? "enabled" : "disabled"}`,
+				"success",
+			);
+		} catch (error) {
+			console.error("Failed to set console status:", error);
+			addMessage("Failed to update Lovely Console status", "error");
+		}
+	}
 
 	async function reindexMods() {
 		isReindexing = true;
@@ -31,6 +48,14 @@
 			isClearingCache = false;
 		}
 	}
+	onMount(async () => {
+		try {
+			isConsoleEnabled = await invoke("get_lovely_console_status");
+		} catch (error) {
+			console.error("Failed to get console status:", error);
+			addMessage("Error fetching Lovely Console status", "error");
+		}
+	});
 </script>
 
 <div class="settings-container">
@@ -75,6 +100,20 @@
 				Removes any untracked mods from the Mods folder
 			</p>
 		</div>
+
+		<h3>Developer Options</h3>
+		<div class="console-settings">
+			<span class="label-text">Enable Lovely Console</span>
+			<div class="switch-container">
+				<label class="switch">
+					<input
+						type="checkbox"
+						checked={isConsoleEnabled}
+						on:change={handleConsoleChange}
+					/> <span class="slider"></span>
+				</label>
+			</div>
+		</div>
 	</div>
 </div>
 
@@ -93,7 +132,6 @@
 	.content {
 		flex: 1;
 	}
-
 	.reindex-button {
 		background: #56a786;
 		color: #f4eee0;
@@ -110,12 +148,10 @@
 		align-items: center;
 		gap: 0.5rem;
 	}
-
 	.reindex-button:hover {
 		background: #74cca8;
 		transform: translateY(-2px);
 	}
-
 	.throbber {
 		width: 20px;
 		height: 20px;
@@ -124,28 +160,24 @@
 		border-top-color: transparent;
 		animation: spin 1s linear infinite;
 	}
-
 	.warning {
-		color: #ffd700; /* Gold/yellow for warning */
+		color: #ffd700;
 		font-size: 1.1rem;
 		border-left: 3px solid #ffd700;
 		padding-left: 0.8rem;
 		margin-top: 0.8rem;
 		max-width: 600px !important;
 	}
-
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
 	}
-
 	.reindex-button:disabled {
 		cursor: not-allowed;
 		opacity: 0.8;
 		transform: none;
 	}
-
 	.clear-cache-button {
 		background: #6d28d9;
 		color: #f4eee0;
@@ -161,18 +193,15 @@
 		align-items: center;
 		gap: 0.5rem;
 	}
-
 	.clear-cache-button:hover:not(:disabled) {
 		background: #7c3aed;
 		transform: translateY(-2px);
 	}
-
 	.clear-cache-button:disabled {
 		cursor: not-allowed;
 		opacity: 0.8;
 		transform: none;
 	}
-
 	.description {
 		color: #f4eee0;
 		font-size: 1.2rem;
@@ -180,8 +209,81 @@
 		opacity: 0.9;
 		max-width: 400px;
 		line-height: 1.4;
+	} /* Custom Toggle Switch Styles */
+	.console-settings {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-top: 1rem;
+		font-size: 1.2rem;
+		color: #f4eee0;
+	}
+	.label-text {
+		white-space: nowrap;
 	}
 
+	.switch {
+		position: relative;
+		display: inline-block;
+		width: 60px;
+		height: 32px;
+	}
+	.switch input {
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+	.slider {
+		position: absolute;
+		cursor: pointer;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0; /* Disabled state: red fill and border */
+		background-color: #f87171;
+		border: 2px solid #fc4747;
+		transition: 0.3s;
+		border-radius: 10px;
+	}
+	.slider:before {
+		position: absolute;
+		content: "";
+		height: 24px;
+		width: 24px;
+		left: 2px;
+		bottom: 2px;
+		background-color: #f4eee0;
+		/* do a gray outline */
+		outline: 2px solid #9e9a90;
+		transition: 0.3s;
+		border-radius: 5px;
+	} /* Enabled state: green fill and border */
+	.switch input:checked + .slider {
+		background-color: #4ade80;
+		border: 2px solid #2fba66;
+	}
+	.switch input:checked + .slider:before {
+		transform: translateX(28px);
+	}
+	@media (max-width: 1160px) {
+		.switch {
+			width: 50px;
+			height: 24px;
+		}
+		.slider {
+			border-radius: 8px;
+		}
+		.slider:before {
+			height: 16px;
+			width: 16px;
+			left: 1px;
+			bottom: 2px;
+			border-radius: 4px;
+		}
+		.switch input:checked + .slider:before {
+			transform: translateX(26px);
+		}
+	}
 	@media (max-width: 1160px) {
 		h2 {
 			font-size: 2rem;
@@ -199,7 +301,6 @@
 			font-size: 1rem;
 			padding: 0.6rem 1.2rem;
 		}
-
 		.description {
 			font-size: 1.1rem;
 			max-width: 100%;
