@@ -22,6 +22,14 @@
 	import { cachedVersions } from "../../stores/modStore";
 	import { onDestroy } from "svelte";
 
+	function handleAuxClick(event: MouseEvent) {
+		// Back button (typically button 3)
+		if (event.button === 3) {
+			event.preventDefault();
+			handleClose();
+		}
+	}
+
 	const VERSION_CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
 
 	const dispatch = createEventDispatcher<{
@@ -337,6 +345,7 @@
 	}
 
 	onMount(async () => {
+		window.addEventListener("auxclick", handleAuxClick);
 		if (mod) {
 			await getAllInstalledMods();
 			await isModInstalled(mod);
@@ -369,23 +378,20 @@
 	}
 
 	onDestroy(async () => {
+		window.removeEventListener("auxclick", handleAuxClick);
 		// Optional: Clear memory cache if needed
 		cachedVersions.set({ steamodded: [], talisman: [] });
 	});
-
-	//
-	// $: if (mod) {
-	// 	isModInstalled(mod);
-	// }
-	// $: if (mod?.title?.toLowerCase() === "steamodded") {
-	// 	loadSteamoddedVersions();
-	// }
-
-	// $: if (mod?.title?.toLowerCase() === "steamodded") {
-	// 	versionLoadAttempted = false;
-	// 	loadSteamoddedVersions();
-	// }
 </script>
+
+<!-- Add keyboard navigation support as fallback -->
+<svelte:window
+	on:keydown={(e) => {
+		if (e.key === "Backspace" || e.key === "Escape") {
+			handleClose();
+		}
+	}}
+/>
 
 {#if $currentModView}
 	<div
