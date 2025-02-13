@@ -11,6 +11,7 @@ pub struct Database {
 pub struct InstalledMod {
     pub name: String,
     pub path: String,
+    pub dependencies: Vec<String>,
 }
 
 impl Database {
@@ -30,6 +31,27 @@ impl Database {
         Ok(Database { conn })
     }
 
+    pub fn get_mod_details(&self, mod_name: &str) -> Result<InstalledMod, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, path, dependencies FROM installed_mods WHERE name = ?1")?;
+
+        let mut rows = stmt.query([mod_name])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(InstalledMod {
+                name: row.get(0)?,
+                path: row.get(1)?,
+                dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
+            })
+        } else {
+            Err(AppError::InvalidState(format!(
+                "Mod {} not found",
+                mod_name
+            )))
+        }
+    }
+
     fn initialize_database(conn: &Connection) -> Result<(), AppError> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
@@ -43,7 +65,8 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS installed_mods (
                 name TEXT PRIMARY KEY,
-                path TEXT NOT NULL
+                path TEXT NOT NULL,
+                dependencies TEXT NOT NULL DEFAULT '[]'
             )",
             [],
         )
@@ -53,7 +76,9 @@ impl Database {
     }
 
     pub fn get_installed_mods(&self) -> Result<Vec<InstalledMod>, AppError> {
-        let mut stmt = self.conn.prepare("SELECT name, path FROM installed_mods")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, path, dependencies FROM installed_mods")?;
         let mut mods = Vec::new();
         let mut rows = stmt.query([])?;
 
@@ -61,18 +86,44 @@ impl Database {
             mods.push(InstalledMod {
                 name: row.get(0)?,
                 path: row.get(1)?,
+                dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
             });
         }
 
         Ok(mods)
     }
 
-    pub fn add_installed_mod(&self, name: &str, path: &str) -> Result<(), AppError> {
+    pub fn add_installed_mod(
+        &self,
+        name: &str,
+        path: &str,
+        dependencies: &[String],
+    ) -> Result<(), AppError> {
+        let deps_json = serde_json::to_string(dependencies)?;
         self.conn.execute(
-            "INSERT OR REPLACE INTO installed_mods (name, path) VALUES (?1, ?2)",
-            [name, path],
+            "INSERT OR REPLACE INTO installed_mods (name, path, dependencies) VALUES (?1, ?2, ?3)",
+            [name, path, &deps_json],
         )?;
         Ok(())
+    }
+
+    pub fn get_dependents(&self, mod_name: &str) -> Result<Vec<String>, AppError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT name FROM installed_mods
+         WHERE EXISTS (
+             SELECT 1 FROM json_each(dependencies)
+             WHERE TRIM(json_each.value, '\"') = ?1
+         )",
+        )?;
+
+        let mut rows = stmt.query([mod_name])?;
+        let mut dependents = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            dependents.push(row.get(0)?);
+        }
+
+        Ok(dependents)
     }
 
     pub fn remove_installed_mod(&self, name: &str) -> Result<(), AppError> {
@@ -146,27 +197,6 @@ impl Database {
             Ok(false)
         }
     }
-
-    // fn get_setting(&self, setting: &str) -> Result<Option<String>, AppError> {
-    //     let mut stmt = self.conn.prepare(
-    //         "SELECT value FROM settings WHERE setting = ?1",
-    //     )?;
-    //     let mut rows = stmt.query([setting])?;
-    //
-    //     if let Some(row) = rows.next()? {
-    //         Ok(Some(row.get(0)?))
-    //     } else {
-    //         Ok(None)
-    //     }
-    // }
-    //
-    // fn delete_setting(&self, setting: &str) -> Result<(), AppError> {
-    //     self.conn.execute(
-    //         "DELETE FROM settings WHERE setting = ?1",
-    //         [setting],
-    //     )?;
-    //     Ok(())
-    // }
 }
 
 #[cfg(test)]
@@ -182,16 +212,25 @@ mod tests {
     }
 
     #[test]
+
     fn test_installed_mods_crud() -> Result<(), AppError> {
         let db = create_memory_db()?;
 
-        db.add_installed_mod("TestMod", "/path/to/mod")?;
+        // Add with empty dependencies
+        db.add_installed_mod("TestMod", "/path/to/mod", &[])?;
         let mods = db.get_installed_mods()?;
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].name, "TestMod");
+        assert!(mods[0].dependencies.is_empty()); // Verify dependencies
+
+        // Add with dependencies
+        let deps = vec!["Steamodded".to_string()];
+        db.add_installed_mod("DependentMod", "/another/path", &deps)?;
+        let mods = db.get_installed_mods()?;
+        assert_eq!(mods[1].dependencies, deps);
 
         db.remove_installed_mod("TestMod")?;
-        assert!(db.get_installed_mods()?.is_empty());
+        assert_eq!(db.get_installed_mods()?.len(), 1);
 
         Ok(())
     }
@@ -206,6 +245,21 @@ mod tests {
 
         db.remove_installation_path()?;
         assert!(db.get_installation_path()?.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mod_details() -> Result<(), AppError> {
+        let db = create_memory_db()?;
+        let deps = vec!["Steamodded".to_string()];
+
+        db.add_installed_mod("TestMod", "/path/to/mod", &deps)?;
+
+        let details = db.get_mod_details("TestMod")?;
+        assert_eq!(details.name, "TestMod");
+        assert_eq!(details.path, "/path/to/mod");
+        assert_eq!(details.dependencies, deps);
 
         Ok(())
     }

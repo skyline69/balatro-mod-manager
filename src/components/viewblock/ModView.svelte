@@ -202,6 +202,11 @@
 	};
 
 	const installMod = async (mod: Mod) => {
+		// Collect dependencies first
+		const dependencies = [];
+		if (mod.requires_steamodded) dependencies.push("Steamodded");
+		if (mod.requires_talisman) dependencies.push("Talisman");
+
 		if (mod.requires_steamodded || mod.requires_talisman) {
 			// Check if dependencies are installed before showing popup
 			const steamoddedInstalled = mod.requires_steamodded
@@ -224,6 +229,7 @@
 				return;
 			}
 		}
+
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 
@@ -231,12 +237,10 @@
 				let installedPath;
 
 				if (selectedVersion === "newest") {
-					// Use regular mod installation for newest version
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
 					});
 				} else {
-					// Use version-specific installation
 					installedPath = await invoke<string>(
 						"install_steamodded_version",
 						{
@@ -245,7 +249,6 @@
 					);
 				}
 
-				// Verify the path exists before updating UI state
 				const pathExists = await invoke("verify_path_exists", {
 					path: installedPath,
 				});
@@ -258,7 +261,7 @@
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					// collection_hash: null,
+					dependencies: dependencies // Steamodded has no dependencies
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
@@ -266,12 +269,10 @@
 				let installedPath;
 
 				if (selectedVersion === "newest") {
-					// Use regular mod installation for newest version
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
 					});
 				} else {
-					// Use version-specific installation
 					installedPath = await invoke<string>(
 						"install_talisman_version",
 						{
@@ -280,7 +281,6 @@
 					);
 				}
 
-				// Verify the path exists before updating UI state
 				const pathExists = await invoke("verify_path_exists", {
 					path: installedPath,
 				});
@@ -293,7 +293,7 @@
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					// collection_hash: null,
+					dependencies: [], // Talisman has no dependencies
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
@@ -301,12 +301,11 @@
 				const installedPath = await invoke<string>("install_mod", {
 					url: mod.downloadURL,
 				});
-				console.log(installedPath);
 
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					// collection_hash: null,
+					dependencies: dependencies,
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));

@@ -6,10 +6,14 @@
 	import Settings from "../../components/viewblock/Settings.svelte";
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
-	import type { DependencyCheck } from "../../stores/modStore";
-	import { showWarningPopup } from "../../stores/modStore";
+	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
+	import {
+		installationStatus,
+		showWarningPopup,
+	} from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
+    import UninstallDialog from "../../components/UninstallDialog.svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -25,6 +29,24 @@
 
 	// Add these for the RequiresPopup
 	let showRequiresPopup = false;
+
+	let showUninstallDialog = false;
+	let selectedMod = { name: "", path: "" };
+	let dependents: string[] = [];
+
+	async function handleRefresh() {
+		const installedMods: InstalledMod[] =
+			await invoke("get_installed_mods_from_db");
+		installationStatus.set(
+			Object.fromEntries(
+				installedMods.map((mod: InstalledMod) => [mod.name, true]),
+			),
+		);
+	}
+
+	function showError(error: string) {
+		addMessage(`Uninstall failed: ${error}`, "error");
+	}
 
 	let modRequirements = {
 		steamodded: false,
@@ -78,7 +100,14 @@
 
 	<div class="content">
 		{#if currentSection === "mods"}
-			<Mods {handleDependencyCheck} />
+			<Mods
+				{handleDependencyCheck}
+				on:request_uninstall={(e) => {
+					selectedMod = e.detail.mod;
+					dependents = e.detail.dependents;
+					showUninstallDialog = true;
+				}}
+			/>
 		{/if}
 
 		{#if currentSection === "settings"}
@@ -100,6 +129,14 @@
 		message="Untracked mods detected! All mods in the Mods directory that are not tracked in the database will be deleted. Are you sure you want to proceed?"
 		onConfirm={confirmReindex}
 		onCancel={() => showWarningPopup.set(false)}
+	/>
+	<UninstallDialog
+		bind:show={showUninstallDialog}
+		targetMod={selectedMod.name}
+		modPath={selectedMod.path}
+		{dependents}
+		on:uninstalled={handleRefresh}
+		on:error={({ detail }) => showError(detail)}
 	/>
 
 	<div class="version-text">v0.1.0</div>

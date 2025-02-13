@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::panic;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -372,9 +373,59 @@ async fn add_installed_mod(
     state: tauri::State<'_, AppState>,
     name: String,
     path: String,
+    dependencies: Vec<String>,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    map_error(db.add_installed_mod(&name, &path))
+    map_error(db.add_installed_mod(&name, &path, &dependencies))
+}
+
+#[tauri::command]
+async fn force_remove_mod(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    path: String,
+) -> Result<(), String> {
+    map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(path)))?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    map_error(db.remove_installed_mod(&name))
+}
+
+#[tauri::command]
+async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
+    let db = Database::new().map_err(|e| e.to_string())?;
+    db.get_dependents(&mod_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cascade_uninstall(
+    state: tauri::State<'_, AppState>,
+    root_mod: String,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let mut to_uninstall = vec![root_mod.clone()];
+    let mut processed = HashSet::new();
+
+    while let Some(current) = to_uninstall.pop() {
+        if processed.contains(&current) {
+            continue;
+        }
+        processed.insert(current.clone());
+
+        // Get mod details
+        let mod_details = map_error(db.get_mod_details(&current))?;
+
+        // Add dependents to queue
+        let dependents = map_error(db.get_dependents(&current))?;
+        to_uninstall.extend(dependents);
+
+        // Perform actual uninstall
+        map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(
+            mod_details.path,
+        )))?;
+        map_error(db.remove_installed_mod(&current))?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -383,8 +434,18 @@ async fn remove_installed_mod(
     name: String,
     path: String,
 ) -> Result<(), String> {
-    bmm_lib::installer::uninstall_mod(PathBuf::from(path))?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
+    let dependents = map_error(db.get_dependents(&name))?;
+
+    if !dependents.is_empty() {
+        return Err(format!(
+            "Cannot uninstall {}: {} dependent mods exist",
+            name,
+            dependents.len()
+        ));
+    }
+
+    map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(path)))?;
     map_error(db.remove_installed_mod(&name))
 }
 
@@ -572,7 +633,10 @@ pub fn run() {
             set_lovely_console_status,
             get_lovely_console_status,
             check_untracked_mods,
-            clear_cache
+            clear_cache,
+            cascade_uninstall,
+            force_remove_mod,
+            get_dependents
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

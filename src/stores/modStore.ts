@@ -15,6 +15,28 @@ export interface Mod {
 	downloadURL: string;
 }
 
+export interface UninstallDialogState {
+	show: boolean;
+	modName: string;
+	modPath: string;
+	dependents: string[];
+}
+
+export const uninstallDialogStore = writable<UninstallDialogState>({
+	show: false,
+	modName: "",
+	modPath: "",
+	dependents: []
+});
+
+export const selectedModStore = writable<{ name: string; path: string } | null>(null);
+export const dependentsStore = writable<string[]>([]);
+
+export type UninstallResult = {
+	success: boolean;
+	action: "cascade" | "force" | "single";
+};
+
 export const cachedVersions = writable<{
 	steamodded: string[];
 	talisman: string[];

@@ -166,6 +166,15 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::Serialization {
+            format: "JSON".to_string(),
+            source: err.to_string(),
+        }
+    }
+}
+
 impl<T> From<std::sync::PoisonError<T>> for AppError {
     fn from(err: std::sync::PoisonError<T>) -> Self {
         AppError::LockPoisoned(format!("Mutex poison error: {}", err))

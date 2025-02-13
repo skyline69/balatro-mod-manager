@@ -13,7 +13,13 @@
 		BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
-	import { currentModView, currentCategory } from "../../stores/modStore";
+	import { tick } from "svelte";
+
+	import {
+		currentModView,
+		currentCategory,
+		uninstallDialogStore,
+	} from "../../stores/modStore";
 	import type { Mod } from "../../stores/modStore";
 	import { Category } from "../../stores/modStore";
 	import {
@@ -28,6 +34,7 @@
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
+
 
 	const loadingDots = writable(0);
 
@@ -132,33 +139,57 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
-		if (!mod?.title) return;
+		const isCoreMod = ["steamodded", "talisman"].includes(
+			mod.title.toLowerCase(),
+		);
+
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name === mod.title,
 			);
-			if (!installedMod) {
-				console.error("Mod not found in installed mods");
-				return;
-			}
-			await invoke("remove_installed_mod", {
-				name: mod.title,
-				path: installedMod.path,
-			});
+			if (!installedMod) return;
 
-			// Force immediate UI update
-			installationStatus.update((s) => ({ ...s, [mod.title]: false }));
+			if (isCoreMod) {
+				// Get fresh dependencies list
+				const dependents = await invoke<string[]>("get_dependents", {
+					modName: mod.title,
+				});
+
+				// Force UI update before showing dialog
+				await tick();
+
+				uninstallDialogStore.set({
+					show: true,
+					modName: mod.title,
+					modPath: installedMod.path,
+					dependents,
+				});
+			} else {
+				// Immediate uninstall for normal mods
+				await invoke("remove_installed_mod", {
+					name: mod.title,
+					path: installedMod.path,
+				});
+				installationStatus.update((s) => ({
+					...s,
+					[mod.title]: false,
+				}));
+			}
 		} catch (error) {
-			console.error("Failed to uninstall mod:", error);
+			console.error("Uninstall failed:", error);
 		}
 	};
-
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
 
+		// Collect dependencies first
+		const dependencies = [];
+		if (mod.requires_steamodded) dependencies.push("Steamodded");
+		if (mod.requires_talisman) dependencies.push("Talisman");
+
+		// Existing dependency check logic
 		if (mod.requires_steamodded || mod.requires_talisman) {
-			// Check if dependencies are installed before showing popup
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Steamodded",
@@ -170,7 +201,6 @@
 					})
 				: true;
 
-			// Only show popup if any required dependency is missing
 			if (!steamoddedInstalled || !talismanInstalled) {
 				handleDependencyCheck({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
@@ -186,9 +216,18 @@
 				url: mod.downloadURL,
 			});
 
+			// Determine dependencies based on mod type
+			let modDependencies = dependencies;
+			if (mod.title.toLowerCase() === "steamodded") {
+				modDependencies = [];
+			} else if (mod.title.toLowerCase() === "talisman") {
+				modDependencies = [];
+			}
+
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
+				dependencies: dependencies,
 			});
 
 			await getAllInstalledMods();

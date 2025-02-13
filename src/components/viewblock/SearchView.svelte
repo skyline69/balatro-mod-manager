@@ -73,6 +73,10 @@
 	};
 
 	const installMod = async (mod: Mod) => {
+		const dependencies = [];
+		if (mod.requires_steamodded) dependencies.push("Steamodded");
+		if (mod.requires_talisman) dependencies.push("Talisman");
+		
 		if (mod.requires_steamodded || mod.requires_talisman) {
 			// Check if dependencies are installed before showing popup
 			const steamoddedInstalled = mod.requires_steamodded
@@ -105,6 +109,7 @@
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
+				dependencies: dependencies,
 			});
 
 			await getAllInstalledMods();
