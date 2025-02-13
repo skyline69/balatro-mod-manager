@@ -3,13 +3,45 @@
 	import { Settings2, RefreshCw } from "lucide-svelte";
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
-
 	import { invoke } from "@tauri-apps/api/core";
-
+	import WarningPopup from "../WarningPopup.svelte";
+    import { showWarningPopup } from "../../stores/modStore";
 	let isReindexing = false;
 	let isClearingCache = false;
 	let isConsoleEnabled = false;
+	export async function performReindexMods() {
+		isReindexing = true;
+		try {
+			await invoke("refresh_mods_folder");
+			addMessage("Successfully re-indexed mods!", "success");
+		} catch (error) {
+			addMessage("Failed to re-index mods: " + error, "error");
+		} finally {
+			isReindexing = false;
+		}
+	}
 
+	function reindexModsWithWarning() {
+		showWarningPopup.set(true);
+	} // Called when the popup's confirm button is pressed
+	function confirmReindex() {
+		showWarningPopup.set(false);
+		performReindexMods();
+	} // Called when the popup's cancel button is pressed
+	function cancelReindex() {
+		showWarningPopup.set(false);
+	}
+	async function clearCache() {
+		isClearingCache = true;
+		try {
+			await invoke("clear_cache");
+			addMessage("Successfully cleared all caches!", "success");
+		} catch (error) {
+			addMessage("Failed to clear cache: " + error, "error");
+		} finally {
+			isClearingCache = false;
+		}
+	}
 	async function handleConsoleChange() {
 		const newValue = !isConsoleEnabled;
 		try {
@@ -22,30 +54,6 @@
 		} catch (error) {
 			console.error("Failed to set console status:", error);
 			addMessage("Failed to update Lovely Console status", "error");
-		}
-	}
-
-	async function reindexMods() {
-		isReindexing = true;
-		try {
-			await invoke("refresh_mods_folder");
-			addMessage("Successfully re-indexed mods!", "success");
-		} catch (error) {
-			addMessage("Failed to re-index mods: " + error, "error");
-		} finally {
-			isReindexing = false;
-		}
-	}
-
-	async function clearCache() {
-		isClearingCache = true;
-		try {
-			await invoke("clear_cache");
-			addMessage("Successfully cleared all caches!", "success");
-		} catch (error) {
-			addMessage("Failed to clear cache: " + error, "error");
-		} finally {
-			isClearingCache = false;
 		}
 	}
 	onMount(async () => {
@@ -86,7 +94,7 @@
 		<div class="mods-settings">
 			<button
 				class="reindex-button"
-				on:click={reindexMods}
+				on:click={reindexModsWithWarning}
 				disabled={isReindexing}
 			>
 				{#if isReindexing}

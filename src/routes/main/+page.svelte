@@ -5,7 +5,11 @@
 	import Mods from "../../components/viewblock/Mods.svelte";
 	import Settings from "../../components/viewblock/Settings.svelte";
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
+	import WarningPopup from "../../components/WarningPopup.svelte";
 	import type { DependencyCheck } from "../../stores/modStore";
+	import { showWarningPopup } from "../../stores/modStore";
+	import { performReindexMods } from "../../utils/performReindexMods";
+
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
 	//     console.log(
@@ -20,6 +24,7 @@
 
 	// Add these for the RequiresPopup
 	let showRequiresPopup = false;
+
 	let modRequirements = {
 		steamodded: false,
 		talisman: false,
@@ -28,6 +33,15 @@
 	function handleDependencyCheck(requirements: DependencyCheck) {
 		modRequirements = requirements;
 		showRequiresPopup = true;
+	}
+
+	function confirmReindex() {
+		performReindexMods();
+		showWarningPopup.set(false);
+	}
+
+	function cancelReindex() {
+		showWarningPopup.set(false);
 	}
 </script>
 
@@ -77,6 +91,12 @@
 		bind:show={showRequiresPopup}
 		requiresSteamodded={modRequirements.steamodded}
 		requiresTalisman={modRequirements.talisman}
+	/>
+	<WarningPopup
+		visible={$showWarningPopup}
+		message="Warning: All mods in the Mods directory that are not tracked in the database will be deleted. Are you sure you want to proceed?"
+		onConfirm={confirmReindex}
+		onCancel={cancelReindex}
 	/>
 
 	<div class="version-text">v0.1.0</div>

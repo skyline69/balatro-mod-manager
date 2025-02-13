@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 	});
 }
 
-
+export const showWarningPopup: Writable<boolean> = writable(false);
 
 export interface DependencyCheck {
 	steamodded: boolean;
