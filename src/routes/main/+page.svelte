@@ -8,7 +8,6 @@
 	import WarningPopup from "../../components/WarningPopup.svelte";
 	import type { DependencyCheck } from "../../stores/modStore";
 	import { showWarningPopup } from "../../stores/modStore";
-	import { performReindexMods } from "../../utils/performReindexMods";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
 

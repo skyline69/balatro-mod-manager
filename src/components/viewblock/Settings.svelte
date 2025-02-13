@@ -30,20 +30,6 @@
 		}
 	}
 
-	async function confirmReindex() {
-		try {
-			await invoke("refresh_mods_folder");
-			addMessage("Mods re-indexed successfully", "success");
-		} catch (error) {
-			addMessage("Failed to re-index mods: " + error, "error");
-		}
-		showWarningPopup.set(false);
-	}
-
-	function reindexModsWithWarning() {
-		showWarningPopup.set(true);
-	} // Called when the popup's confirm button is pressed
-
 	async function clearCache() {
 		isClearingCache = true;
 		try {
