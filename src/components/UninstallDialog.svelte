@@ -70,11 +70,13 @@
 			{#if dependents.length > 0}
 				<div class="dependency-list">
 					<h3>{modName} is required for:</h3>
-					<ul>
-						{#each dependents as dependent}
-							<li>{dependent}</li>
-						{/each}
-					</ul>
+					<div class="scroll-container">
+						<ul>
+							{#each dependents as dependent}
+								<li>{dependent}</li>
+							{/each}
+						</ul>
+					</div>
 				</div>
 
 				<div class="actions">
@@ -129,6 +131,7 @@
 	.dependency-list h3 {
 		color: #fdcf51;
 		margin-bottom: 0.5rem;
+		font-size: 1.5rem;
 	}
 
 	.dependency-list ul {
@@ -139,6 +142,28 @@
 	.dependency-list li {
 		color: #f4eee0;
 		margin-bottom: 0.25rem;
+	}
+
+	.scroll-container {
+		max-height: 40vh;
+		overflow-y: auto;
+		margin: 0.5rem 0;
+		padding-right: 0.5rem;
+
+		&::-webkit-scrollbar {
+			width: 10px;
+		}
+
+		&::-webkit-scrollbar-track {
+			background: transparent;
+			border-radius: 15px;
+		}
+
+		&::-webkit-scrollbar-thumb {
+			background: #f4eee0;
+			border: 2px solid rgba(193, 65, 57, 0.8);
+			border-radius: 15px;
+		}
 	}
 
 	.dialog-overlay {
@@ -188,7 +213,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		font-size: 1.1rem;
+		font-size: 1.2rem;
 	}
 
 	li::before {
@@ -268,6 +293,10 @@
 			margin: 1rem;
 		}
 
+		.scroll-container {
+			max-height: 35vh;
+		}
+
 		h2 {
 			font-size: 1.5rem;
 			margin-bottom: 1rem;
@@ -303,6 +332,10 @@
 		.dialog-content {
 			padding: 1rem;
 			border-width: 1px;
+		}
+
+		.scroll-container {
+			max-height: 30vh;
 		}
 
 		h2 {
