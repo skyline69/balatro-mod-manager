@@ -15,6 +15,15 @@ export interface Mod {
 	downloadURL: string;
 }
 
+export enum SortOption {
+	NameAsc = "name_asc",
+	NameDesc = "name_desc",
+	LastUpdatedAsc = "updated_asc",
+	LastUpdatedDesc = "updated_desc"
+}
+
+export const currentSort = writable<SortOption>(SortOption.NameAsc);
+
 export interface UninstallDialogState {
 	show: boolean;
 	modName: string;

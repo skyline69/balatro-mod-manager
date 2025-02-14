@@ -14,6 +14,8 @@
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { tick } from "svelte";
+	import { SortOption, currentSort } from "../../stores/modStore";
+	import { ArrowUpDown } from "lucide-svelte";
 
 	import {
 		currentModView,
@@ -543,6 +545,30 @@
 			open(anchor.href);
 		}
 	});
+
+	function sortMods(mods: Mod[], sortOption: SortOption): Mod[] {
+		return [...mods].sort((a, b) => {
+			switch (sortOption) {
+				case SortOption.NameAsc:
+					return a.title.localeCompare(b.title);
+				case SortOption.NameDesc:
+					return b.title.localeCompare(a.title);
+				case SortOption.LastUpdatedAsc:
+					return a.lastUpdated.localeCompare(b.lastUpdated);
+				case SortOption.LastUpdatedDesc:
+					return b.lastUpdated.localeCompare(a.lastUpdated);
+				default:
+					return 0;
+			}
+		});
+	}
+
+	// Add sort handler
+	function handleSortChange(event: Event) {
+		const select = event.target as HTMLSelectElement;
+		currentSort.set(select.value as SortOption);
+	}
+	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
 </script>
 
 <div class="mods-container">
@@ -567,64 +593,84 @@
 	{:else if showSearch}
 		<SearchView />
 	{:else}
-		<div class="mods-grid">
-			{#each filteredMods as mod}
-				<div
-					class="mod-card"
-					style="--orig-color1: {mod.colors
-						.color1}; --orig-color2: {mod.colors.color2};"
-					on:click={() => handleModClick(mod)}
-					on:keydown={(e) => e.key === "Enter" && handleModClick(mod)}
-					role="button"
-					tabindex="0"
-				>
-					<div class="mod-image">
-						<img
-							src={mod.image}
-							alt={mod.title}
-							draggable="false"
-						/>
-						<div class="tags">
-							<span class="tag updated">
-								<Clock size={13} />
-								{mod.lastUpdated}
-							</span>
+		<div class="mods-wrapper">
+			<div class="sort-controls">
+				<div class="sort-wrapper">
+					<ArrowUpDown size={16} />
+					<select value={$currentSort} on:change={handleSortChange}>
+						<option value={SortOption.NameAsc}>Name (A-Z)</option>
+						<option value={SortOption.NameDesc}>Name (Z-A)</option>
+						<option value={SortOption.LastUpdatedDesc}
+							>Latest Updated</option
+						>
+						<option value={SortOption.LastUpdatedAsc}
+							>Oldest Updated</option
+						>
+					</select>
+				</div>
+			</div>
+			<div class="mods-grid">
+				{#each sortedAndFilteredMods as mod}
+					<div
+						class="mod-card"
+						style="--orig-color1: {mod.colors
+							.color1}; --orig-color2: {mod.colors.color2};"
+						on:click={() => handleModClick(mod)}
+						on:keydown={(e) =>
+							e.key === "Enter" && handleModClick(mod)}
+						role="button"
+						tabindex="0"
+					>
+						<div class="mod-image">
+							<img
+								src={mod.image}
+								alt={mod.title}
+								draggable="false"
+							/>
+							<div class="tags">
+								<span class="tag updated">
+									<Clock size={13} />
+									{mod.lastUpdated}
+								</span>
+							</div>
+						</div>
+						<div class="mod-info">
+							<h3>{mod.title}</h3>
+							<p>
+								{truncateText(stripMarkdown(mod.description))}
+							</p>
+						</div>
+						<div class="button-container">
+							<button
+								class="download-button"
+								class:installed={$installationStatus[mod.title]}
+								disabled={$installationStatus[mod.title] ||
+									$loadingStates[mod.title]}
+								on:click|stopPropagation={() => installMod(mod)}
+							>
+								{#if $loadingStates[mod.title]}
+									<div class="spinner"></div>
+								{:else}
+									<Download size={16} />
+									{$installationStatus[mod.title]
+										? "Installed"
+										: "Download"}
+								{/if}
+							</button>
+
+							{#if $installationStatus[mod.title]}
+								<button
+									class="delete-button"
+									on:click|stopPropagation={() =>
+										uninstallMod(mod)}
+								>
+									<Trash2 size={16} />
+								</button>
+							{/if}
 						</div>
 					</div>
-					<div class="mod-info">
-						<h3>{mod.title}</h3>
-						<p>{truncateText(stripMarkdown(mod.description))}</p>
-					</div>
-					<div class="button-container">
-						<button
-							class="download-button"
-							class:installed={$installationStatus[mod.title]}
-							disabled={$installationStatus[mod.title] ||
-								$loadingStates[mod.title]}
-							on:click|stopPropagation={() => installMod(mod)}
-						>
-							{#if $loadingStates[mod.title]}
-								<div class="spinner"></div>
-							{:else}
-								<Download size={16} />
-								{$installationStatus[mod.title]
-									? "Installed"
-									: "Download"}
-							{/if}
-						</button>
-
-						{#if $installationStatus[mod.title]}
-							<button
-								class="delete-button"
-								on:click|stopPropagation={() =>
-									uninstallMod(mod)}
-							>
-								<Trash2 size={16} />
-							</button>
-						{/if}
-					</div>
-				</div>
-			{/each}
+				{/each}
+			</div>
 		</div>
 	{/if}
 </div>
@@ -704,6 +750,10 @@
 	}
 
 	.mods-grid {
+		padding-top: 50px; /* Reduced from 60px since control is lower */
+
+		height: 100%;
+
 		flex: 1;
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -762,6 +812,76 @@
 			var(--bg-color-2) 10px,
 			var(--bg-color-2) 20px
 		);
+	}
+
+	.sort-controls {
+		position: fixed;
+		top: 2.3rem; /* Increased from 2rem */
+		right: 3rem; /* Increased from 2.5rem */
+		z-index: 1000;
+		margin: 0;
+		background: transparent;
+		transform: translateY(0); /* Reset any transforms */
+	}
+
+	.sort-wrapper {
+		background: #ea9600;
+		border: 2px solid #f4eee0;
+		padding: 0.5rem;
+		border-radius: 6px;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	}
+
+	.mods-wrapper {
+		flex: 1;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.sort-wrapper :global(svg) {
+		color: #f4eee0;
+	}
+
+	select {
+		background: #ea9600;
+		color: #f4eee0;
+		border: none;
+		font-family: "M6X11", sans-serif;
+		font-size: 1rem;
+		padding: 0.25rem 1.5rem 0.25rem 0.5rem;
+		border-radius: 4px;
+		cursor: pointer;
+		-webkit-appearance: none;
+		-moz-appearance: none;
+		appearance: none;
+		background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23F4EEE0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.5em top 50%;
+		background-size: 0.65em auto;
+	}
+
+	select:hover {
+		background-color: #f0a620;
+	}
+
+	select:focus {
+		outline: none;
+		box-shadow: 0 0 0 2px #f4eee0;
+	}
+
+	select option {
+		background: #ea9600;
+		color: #f4eee0;
+		padding: 0.5rem;
+	}
+
+	.sort-wrapper:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
 	.mod-card:hover {
@@ -950,5 +1070,111 @@
 	.download-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
+	}
+
+	/* Add these media queries at the end of the style section */
+	@media (max-width: 768px) {
+		.mods-container {
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+
+		.categories {
+			width: 100%;
+			flex-direction: row;
+			overflow-x: auto;
+			padding-bottom: 0.5rem;
+			height: auto;
+		}
+
+		.categories button {
+			flex-shrink: 0;
+			padding: 0.75rem;
+			font-size: 0.9rem;
+		}
+
+		.separator {
+			width: 100%;
+			height: 2px;
+			margin: 0.5rem 0;
+		}
+
+		.sort-controls {
+			position: sticky;
+			top: 0;
+			right: auto;
+			left: 50%;
+			transform: translateX(-50%);
+			width: fit-content;
+			margin: 0.5rem auto;
+			z-index: 1000;
+		}
+
+		.mods-grid {
+			padding-top: 70px;
+			grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+			gap: 20px;
+			padding: 0.5rem;
+		}
+
+		.mod-card {
+			width: 100%;
+			max-width: 280px;
+			height: 300px;
+		}
+
+		.mod-image {
+			height: 130px;
+		}
+
+		.mod-info h3 {
+			font-size: 1.3rem;
+		}
+
+		.mod-info p {
+			font-size: 0.9rem;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.sort-controls {
+			top: 0.5rem;
+		}
+
+		.sort-wrapper {
+			padding: 0.4rem;
+		}
+
+		select {
+			font-size: 0.9rem;
+			padding-right: 1.2rem;
+		}
+
+		.mods-grid {
+			grid-template-columns: 1fr;
+			padding: 0.5rem;
+		}
+
+		.mod-card {
+			height: auto;
+			min-height: 280px;
+		}
+
+		.button-container {
+			position: relative;
+			bottom: auto;
+			left: auto;
+			margin-top: 0.5rem;
+		}
+
+		.download-button {
+			position: relative;
+			bottom: auto;
+			left: auto;
+		}
+
+		.tags {
+			top: 6rem;
+		}
 	}
 </style>
