@@ -5,9 +5,6 @@ use std::sync::Mutex;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
 
-#[cfg(not(target_os = "windows"))]
-use crate::lovely::ensure_lovely_exists;
-
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::cache;
 use bmm_lib::cache::Mod;
@@ -209,19 +206,24 @@ async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), St
 
 #[tauri::command]
 async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
-    let path_str = db
-        .get_installation_path()?
-        .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?;
-    let lovely_console_enabled = db.is_lovely_console_enabled()?;
+    let (path_str, lovely_console_enabled) = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+
+        (
+            db.get_installation_path()?
+                .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?,
+            db.is_lovely_console_enabled()?,
+        )
+    };
+
     let path = PathBuf::from(path_str);
 
     #[cfg(target_os = "macos")]
     {
-        let lovely_path = map_error(ensure_lovely_exists())?;
+        let lovely_path = map_error(lovely::ensure_lovely_exists().await)?;
         let balatro_executable = path.join("Balatro.app/Contents/MacOS/love");
 
         if lovely_console_enabled {

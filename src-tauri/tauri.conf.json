@@ -36,8 +36,7 @@
     ],
     "resources": [
       "../static/fonts",
-      "../static/images",
-	  "bundled_dylibs/liblovely.dylib"
+      "../static/images"
     ],
     "macOS": {
       "entitlements": "Entitlements.plist",

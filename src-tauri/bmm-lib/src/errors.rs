@@ -15,9 +15,18 @@ pub enum AppError {
         path: PathBuf,
         source: String,
     },
+    FileCopy {
+        source: String,
+        dest: String,
+        source_error: String,
+    },
     FileWrite {
         path: PathBuf,
         source: String,
+    },
+    FileNotFound {
+        path: PathBuf,
+        source: String
     },
     DirCreate {
         path: PathBuf,
@@ -80,6 +89,9 @@ pub enum AppError {
         format: String,
         source: String,
     },
+
+    // Network
+    Network(String),
 
     // Miscellaneous
     Unknown(String),

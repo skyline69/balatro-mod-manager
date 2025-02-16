@@ -6,9 +6,14 @@
 	export let show: boolean = false;
 	export let onClose: () => void;
 
+	let disableLaunchButton = false;
+	let disableCheckButton = false;
+
 	let isError: boolean = false;
 
 	async function handleLaunch() {
+		disableLaunchButton = true;
+		disableCheckButton = true;
 		try {
 			await invoke("launch_balatro");
 			onClose();
@@ -16,10 +21,14 @@
 		} catch (error) {
 			console.error("Failed to launch game:", error);
 			return;
+		} finally {
+			disableLaunchButton = false;
+			disableCheckButton = false;
 		}
 	}
 
 	async function handleCheckAgain() {
+		disableCheckButton = true;
 		try {
 			let steam_running: boolean = await invoke("check_steam_running");
 			if (!steam_running) {
@@ -34,7 +43,14 @@
 			}
 		} catch (error) {
 			console.error("Failed to check if Steam is running:", error);
+		} finally {
+			disableCheckButton = false;
 		}
+	}
+
+	$: if (!show) {
+		disableLaunchButton = false;
+		disableCheckButton = false;
 	}
 </script>
 
@@ -55,11 +71,27 @@
 					Steam is not running. Are you sure?
 				</h2>
 				<div class="button-container">
-					<button class="launch-button" on:click={handleLaunch}>
-						Yes, launch without Steam
+					<button
+						class="launch-button"
+						on:click={handleLaunch}
+						disabled={disableLaunchButton}
+					>
+						{#if disableLaunchButton}
+							Launching...
+						{:else}
+							Yes, launch without Steam
+						{/if}
 					</button>
-					<button class="check-button" on:click={handleCheckAgain}>
-						Check again
+					<button
+						class="check-button"
+						on:click={handleCheckAgain}
+						disabled={disableCheckButton}
+					>
+						{#if disableCheckButton}
+							Checking...
+						{:else}
+							Check again
+						{/if}
 					</button>
 				</div>
 			</div>

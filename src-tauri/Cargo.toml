@@ -24,7 +24,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.2.0"
 bmm-lib = { path = "bmm-lib" }
-lovely-mac = { path = "lovely-injector/crates/lovely-mac" }
 pretty_env_logger = "0.5.0"
 dirs = "6.0.0"
 tauri-plugin-fs = "2"
