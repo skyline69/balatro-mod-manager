@@ -370,6 +370,70 @@ async fn force_remove_mod(
 }
 
 #[tauri::command]
+async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize), String> {
+    let mod_dir = dirs::config_dir()
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
+        .join("Balatro")
+        .join("Mods");
+
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    
+    // Phase 1: Filesystem cleanup
+    let mut files_removed = 0;
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
+    
+    match std::fs::read_dir(&mod_dir) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = match path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) if !n.contains("lovely") => n,
+                    _ => continue,
+                };
+
+                if !installed_mods.iter().any(|m| m.path.contains(name)) {
+                    match entry.file_type() {
+                        Ok(ft) => {
+                            if ft.is_dir() {
+                                std::fs::remove_dir_all(&path).ok();
+                            } else if ft.is_file() {
+                                std::fs::remove_file(&path).ok();
+                            }
+                            files_removed += 1;
+                        }
+                        Err(_) => continue,
+                    }
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
+    }
+
+    // Phase 2: Database cleanup
+    let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
+    let mut cleaned_entries = 0;
+    let mut to_remove = Vec::new();
+
+    for (index, installed_mod) in installed_mods.iter().enumerate() {
+        if !PathBuf::from(&installed_mod.path).exists() {
+            to_remove.push(index);
+        }
+    }
+
+    cleaned_entries = to_remove.len();
+    for &index in to_remove.iter().rev() {
+        db.remove_installed_mod(&installed_mods[index].name)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok((files_removed, cleaned_entries))
+}
+
+#[tauri::command]
 async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
     let db = Database::new().map_err(|e| e.to_string())?;
     db.get_dependents(&mod_name).map_err(|e| e.to_string())
@@ -620,7 +684,8 @@ pub fn run() {
             clear_cache,
             cascade_uninstall,
             force_remove_mod,
-            get_dependents
+            get_dependents,
+            reindex_mods
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

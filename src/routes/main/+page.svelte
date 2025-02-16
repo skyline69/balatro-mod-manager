@@ -13,7 +13,7 @@
 	} from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
-    import UninstallDialog from "../../components/UninstallDialog.svelte";
+	import UninstallDialog from "../../components/UninstallDialog.svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -35,8 +35,9 @@
 	let dependents: string[] = [];
 
 	async function handleRefresh() {
-		const installedMods: InstalledMod[] =
-			await invoke("get_installed_mods_from_db");
+		const installedMods: InstalledMod[] = await invoke(
+			"get_installed_mods_from_db",
+		);
 		installationStatus.set(
 			Object.fromEntries(
 				installedMods.map((mod: InstalledMod) => [mod.name, true]),
@@ -58,15 +59,6 @@
 		showRequiresPopup = true;
 	}
 
-	async function confirmReindex() {
-		try {
-			await invoke("refresh_mods_folder");
-			addMessage("Mods re-indexed successfully", "success");
-		} catch (error) {
-			addMessage("Failed to re-index mods: " + error, "error");
-		}
-		showWarningPopup.set(false);
-	}
 </script>
 
 <ShaderBackground />
@@ -125,14 +117,14 @@
 	/>
 
 	<WarningPopup
-		visible={$showWarningPopup}
-		message="Untracked mods detected! All mods in the Mods directory that are not tracked in the database will be deleted. Are you sure you want to proceed?"
-		onConfirm={confirmReindex}
-		onCancel={() => showWarningPopup.set(false)}
+		visible={$showWarningPopup.visible}
+		message={$showWarningPopup.message}
+		onConfirm={$showWarningPopup.onConfirm}
+		onCancel={$showWarningPopup.onCancel}
 	/>
 	<UninstallDialog
 		bind:show={showUninstallDialog}
-		targetMod={selectedMod.name}
+		modName={selectedMod.name}
 		modPath={selectedMod.path}
 		{dependents}
 		on:uninstalled={handleRefresh}

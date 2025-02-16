@@ -1,10 +1,21 @@
 <script lang="ts">
 	import { fade, scale } from "svelte/transition";
+    import { showWarningPopup } from "../stores/modStore";
 
 	export let visible: boolean = false;
 	export let message: string = "";
 	export let onConfirm: () => void;
 	export let onCancel: () => void;
+
+	function handleConfirm() {
+		onConfirm();
+		showWarningPopup.update((p) => ({ ...p, visible: false }));
+	}
+
+	function handleCancel() {
+		onCancel();
+		showWarningPopup.update((p) => ({ ...p, visible: false }));
+	}
 </script>
 
 {#if visible}
@@ -16,9 +27,10 @@
 			<h2>Warning</h2>
 			<p>{message}</p>
 			<div class="buttons">
-				<button class="cancel-button" on:click={onCancel}>Cancel</button
+				<button class="cancel-button" on:click={handleCancel}
+					>Cancel</button
 				>
-				<button class="confirm-button" on:click={onConfirm}
+				<button class="confirm-button" on:click={handleConfirm}
 					>Confirm</button
 				>
 			</div>

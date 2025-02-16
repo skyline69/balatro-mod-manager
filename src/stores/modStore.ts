@@ -65,8 +65,6 @@ if (typeof window !== 'undefined') {
 	});
 }
 
-export const showWarningPopup: Writable<boolean> = writable(false);
-
 export interface DependencyCheck {
 	steamodded: boolean;
 	talisman: boolean;
@@ -126,3 +124,19 @@ function createPersistentCategory() {
 }
 
 export const currentCategory = createPersistentCategory();
+
+
+export interface WarningPopupState {
+	visible: boolean;
+	message: string;
+	onConfirm: () => void;
+	onCancel: () => void;
+}
+
+export const showWarningPopup = writable<WarningPopupState>({
+	visible: false,
+	message: "",
+	onConfirm: () => { },
+	onCancel: () => { }
+});
+

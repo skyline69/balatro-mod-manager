@@ -5,9 +5,14 @@
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
 	import { showWarningPopup } from "../../stores/modStore";
+
 	let isReindexing = false;
 	let isClearingCache = false;
 	let isConsoleEnabled = false;
+	let lastReindexStats = {
+		removedFiles: 0,
+		cleanedEntries: 0,
+	};
 
 	export async function performReindexMods() {
 		isReindexing = true;
@@ -15,21 +20,67 @@
 			const hasUntracked = await invoke<boolean>("check_untracked_mods");
 
 			if (hasUntracked) {
-				showWarningPopup.set(true);
+				showWarningPopup.set({
+					visible: true,
+					message:
+						"Untracked mod files detected. Reindexing will permanently delete these files.",
+					onConfirm: async () => {
+						try {
+							const result =
+								await invoke<[number, number]>("reindex_mods");
+							lastReindexStats = {
+								removedFiles: result[0],
+								cleanedEntries: result[1],
+							};
+							addMessage(
+								`Reindex complete: Removed ${result[0]} files, ` +
+									`cleaned ${result[1]} entries`,
+								"success",
+							);
+						} catch (error) {
+							addMessage(`Reindex failed: ${error}`, "error");
+						} finally {
+							isReindexing = false;
+							// Explicitly hide popup after operation
+							showWarningPopup.update((p) => ({
+								...p,
+								visible: false,
+							}));
+						}
+					},
+					onCancel: () => {
+						addMessage("Reindex cancelled", "warning");
+						isReindexing = false;
+						// Hide popup on cancel
+						showWarningPopup.update((p) => ({
+							...p,
+							visible: false,
+						}));
+					},
+				});
 			} else {
-				await invoke("refresh_mods_folder");
-				addMessage(
-					"Mods re-indexed - no untracked files found",
-					"success",
-				);
+				try {
+					const result =
+						await invoke<[number, number]>("reindex_mods");
+					lastReindexStats = {
+						removedFiles: result[0],
+						cleanedEntries: result[1],
+					};
+					addMessage(
+						`Reindex complete: No untracked files found`,
+						"success",
+					);
+				} catch (error) {
+					addMessage("Reindex failed: " + error, "error");
+				} finally {
+					isReindexing = false;
+				}
 			}
 		} catch (error) {
-			addMessage("Failed to re-index mods: " + error, "error");
-		} finally {
+			addMessage("Reindex check failed: " + error, "error");
 			isReindexing = false;
 		}
 	}
-
 	async function clearCache() {
 		isClearingCache = true;
 		try {
@@ -96,16 +147,32 @@
 				class="reindex-button"
 				on:click={performReindexMods}
 				disabled={isReindexing}
+				title="Synchronize database with filesystem state"
 			>
 				{#if isReindexing}
 					<div class="throbber"></div>
+					Scanning...
 				{:else}
 					<Settings2 size={20} />
-					Reindex Mods
+					Validate Mod Database
 				{/if}
 			</button>
+
+			{#if lastReindexStats.removedFiles + lastReindexStats.cleanedEntries > 0}
+				<div class="reindex-stats">
+					<strong>Last cleanup:</strong>
+					<span>Files removed: {lastReindexStats.removedFiles}</span>
+					<span
+						>Database entries cleaned: {lastReindexStats.cleanedEntries}</span
+					>
+				</div>
+			{/if}
+
 			<p class="description">
-				Removes any untracked mods from the Mods folder
+				Performs full consistency check between installed mods and
+				database. Will remove:
+				<br />• Untracked files/directories in Mods folder
+				<br />• Database entries for missing mod installations
 			</p>
 		</div>
 
