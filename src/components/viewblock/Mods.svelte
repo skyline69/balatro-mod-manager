@@ -750,10 +750,7 @@
 	}
 
 	.mods-grid {
-		padding-top: 50px; /* Reduced from 60px since control is lower */
-
-		height: 100%;
-
+		height: 95%;
 		flex: 1;
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
