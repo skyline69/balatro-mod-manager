@@ -379,7 +379,7 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
     let db = state
         .db
         .lock()
-        .map_err(|e| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+        .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {}", e)))?;
     
     // Phase 1: Filesystem cleanup
     let mut files_removed = 0;
@@ -415,7 +415,6 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
 
     // Phase 2: Database cleanup
     let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
-    let mut cleaned_entries = 0;
     let mut to_remove = Vec::new();
 
     for (index, installed_mod) in installed_mods.iter().enumerate() {
@@ -424,7 +423,7 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
         }
     }
 
-    cleaned_entries = to_remove.len();
+    let cleaned_entries = to_remove.len();
     for &index in to_remove.iter().rev() {
         db.remove_installed_mod(&installed_mods[index].name)
             .map_err(|e| e.to_string())?;
