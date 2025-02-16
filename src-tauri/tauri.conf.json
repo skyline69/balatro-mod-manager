@@ -41,7 +41,7 @@
     "macOS": {
       "entitlements": "Entitlements.plist",
       "minimumSystemVersion": "11.0",
-      "signingIdentity": null,
+      "signingIdentity": "Developer ID Application: Öner Efe Dasguney (C4G7YDX6RS)",
       "providerShortName": null,
       "frameworks": []
     }
