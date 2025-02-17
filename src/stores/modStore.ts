@@ -22,6 +22,8 @@ export enum SortOption {
 	LastUpdatedDesc = "updated_desc"
 }
 
+export const backgroundEnabled = writable(false);
+
 export const currentSort = writable<SortOption>(SortOption.NameAsc);
 
 export interface UninstallDialogState {

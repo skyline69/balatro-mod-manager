@@ -14,7 +14,11 @@
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { tick } from "svelte";
-	import { SortOption, currentSort } from "../../stores/modStore";
+	import {
+		SortOption,
+		backgroundEnabled,
+		currentSort,
+	} from "../../stores/modStore";
 	import { ArrowUpDown } from "lucide-svelte";
 
 	import {
@@ -36,6 +40,7 @@
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
+	import { addMessage } from "$lib/stores";
 
 	const loadingDots = writable(0);
 
@@ -562,6 +567,18 @@
 			}
 		});
 	}
+
+	onMount(async () => {
+		try {
+			let isBackgroundAnimationEnabled: boolean = await invoke(
+				"get_background_state",
+			);
+			backgroundEnabled.set(isBackgroundAnimationEnabled);
+		} catch (error) {
+			console.error("Failed to get background status:", error);
+			addMessage("Error fetching background animation status", "error");
+		}
+	});
 
 	// Add sort handler
 	function handleSortChange(event: Event) {

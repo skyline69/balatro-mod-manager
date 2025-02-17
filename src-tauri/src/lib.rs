@@ -380,11 +380,11 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
         .db
         .lock()
         .map_err(|e| AppError::LockPoisoned(format!("Database lock poisoned: {}", e)))?;
-    
+
     // Phase 1: Filesystem cleanup
     let mut files_removed = 0;
     let installed_mods = db.get_installed_mods().map_err(|e| e.to_string())?;
-    
+
     match std::fs::read_dir(&mod_dir) {
         Ok(entries) => {
             for entry in entries.flatten() {
@@ -564,6 +564,18 @@ async fn install_talisman_version(version: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn get_background_state(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    map_error(db.get_background_enabled())
+}
+
+#[tauri::command]
+async fn set_background_state(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    map_error(db.set_background_enabled(enabled))
+}
+
+#[tauri::command]
 async fn verify_path_exists(path: String) -> bool {
     match std::fs::exists(PathBuf::from(path)) {
         Ok(exists) => exists,
@@ -684,7 +696,9 @@ pub fn run() {
             cascade_uninstall,
             force_remove_mod,
             get_dependents,
-            reindex_mods
+            reindex_mods,
+            get_background_state,
+            set_background_state
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

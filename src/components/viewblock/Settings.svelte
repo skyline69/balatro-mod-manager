@@ -4,11 +4,12 @@
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
-	import { showWarningPopup } from "../../stores/modStore";
+	import { showWarningPopup, backgroundEnabled } from "../../stores/modStore";
 
 	let isReindexing = false;
 	let isClearingCache = false;
 	let isConsoleEnabled = false;
+	let isBackgroundAnimationEnabled = false;
 	let lastReindexStats = {
 		removedFiles: 0,
 		cleanedEntries: 0,
@@ -106,12 +107,36 @@
 			addMessage("Failed to update Lovely Console status", "error");
 		}
 	}
+
+	async function handleBackgroundAnimationChange() {
+		const newValue = !isBackgroundAnimationEnabled;
+
+		// Optimistic UI update
+		backgroundEnabled.set(newValue);
+
+		try {
+			await invoke("set_background_state", { enabled: newValue });
+			isBackgroundAnimationEnabled = newValue;
+		} catch (error) {
+			// Rollback on failure
+			backgroundEnabled.set(!newValue);
+			isBackgroundAnimationEnabled = !newValue;
+		}
+	}
+
 	onMount(async () => {
 		try {
 			isConsoleEnabled = await invoke("get_lovely_console_status");
 		} catch (error) {
 			console.error("Failed to get console status:", error);
 			addMessage("Error fetching Lovely Console status", "error");
+		}
+		try {
+			isBackgroundAnimationEnabled = await invoke("get_background_state");
+			backgroundEnabled.set(isBackgroundAnimationEnabled);
+		} catch (error) {
+			console.error("Failed to get background status:", error);
+			addMessage("Error fetching background animation status", "error");
 		}
 	});
 </script>
@@ -168,13 +193,30 @@
 				</div>
 			{/if}
 
-			<p class="description">
+			<p class="description-small">
 				Performs full consistency check between installed mods and
 				database. Will remove:
 				<br />• Untracked files/directories in Mods folder
 				<br />• Database entries for missing mod installations
 			</p>
 		</div>
+		<h3>Appearance</h3>
+		<div class="console-settings">
+			<span class="label-text">Enable Background Animation</span>
+			<div class="switch-container">
+				<label class="switch">
+					<input
+						type="checkbox"
+						checked={isBackgroundAnimationEnabled}
+						on:change={handleBackgroundAnimationChange}
+					/> <span class="slider"></span>
+				</label>
+			</div>
+		</div>
+		<p class="description-small">
+			Enable or disable the animated background. Disabling may improve
+			performance on low-end devices.
+		</p>
 
 		<h3>Developer Options</h3>
 		<div class="console-settings">
@@ -285,6 +327,15 @@
 		max-width: 400px;
 		line-height: 1.4;
 	} /* Custom Toggle Switch Styles */
+	.description-small {
+		/* color a bit grayer but still light */
+		color: #c4c2c2;
+		font-size: 1.1rem;
+		margin-top: 0.5rem;
+		opacity: 0.9;
+		max-width: 400px;
+		line-height: 1.4;
+	}
 	.console-settings {
 		display: flex;
 		align-items: center;
@@ -378,6 +429,10 @@
 		}
 		.description {
 			font-size: 1.1rem;
+			max-width: 100%;
+		}
+		.description-small {
+			font-size: 1rem;
 			max-width: 100%;
 		}
 	}

@@ -7,6 +7,7 @@
 	import RequiresPopup from "../../components/RequiresPopup.svelte";
 	import WarningPopup from "../../components/WarningPopup.svelte";
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
+	import { backgroundEnabled } from "../../stores/modStore";
 	import {
 		installationStatus,
 		showWarningPopup,
@@ -14,6 +15,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { addMessage } from "$lib/stores";
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
+	import { onMount } from "svelte";
 
 	let currentSection = "mods";
 	// window.addEventListener("resize", () => {
@@ -59,9 +61,15 @@
 		showRequiresPopup = true;
 	}
 
+	onMount(() => {
+		handleRefresh();
+	});
 </script>
 
-<ShaderBackground />
+{#if $backgroundEnabled}
+	<ShaderBackground />
+{/if}
+
 <div class="main-page">
 	<header>
 		<div class="header-content">

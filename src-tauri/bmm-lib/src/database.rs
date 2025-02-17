@@ -161,6 +161,28 @@ impl Database {
         Ok(())
     }
 
+    pub fn set_background_enabled(&self, enabled: bool) -> Result<(), AppError> {
+        let enabled: &str = if enabled { "enabled" } else { "disabled" };
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('background_enabled', ?1)",
+            [enabled],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_background_enabled(&self) -> Result<bool, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'background_enabled'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(row.get::<_, String>(0)? == "enabled")
+        } else {
+            Ok(false)
+        }
+    }
+
     fn enable_lovely_console(&self) -> Result<(), AppError> {
         self.conn.execute(
             "INSERT OR REPLACE INTO settings (setting, value) VALUES ('lovely_console', 'enabled')",
