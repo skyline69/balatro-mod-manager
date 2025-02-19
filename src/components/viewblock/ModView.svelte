@@ -101,6 +101,7 @@
 
 			selectedVersion = "newest";
 
+
 			// Update cache
 			cachedVersions.update((c) => ({ ...c, steamodded: versions }));
 			await invoke("save_versions_cache", {
@@ -501,7 +502,7 @@
 									bind:value={selectedVersion}
 									disabled={$loadingStates[mod.title]}
 								>
-									<option value="newest"
+									<option value="newest" selected
 										>latest (could be unstable)</option
 									>
 									{#each talismanVersions as version}
