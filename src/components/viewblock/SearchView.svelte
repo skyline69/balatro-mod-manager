@@ -13,26 +13,26 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
-	import { createEventDispatcher } from "svelte";
 	import { tick } from "svelte";
 
-	let searchQuery = "";
-	let searchResults: Mod[] = [];
-	let isSearching = false;
-	let searchIndex: any;
-	let mods: Mod[] = [];
+	let searchQuery = $state("");
+	let searchResults = $state<Mod[]>([]);
+	let isSearching = $state(false);
+	let searchIndex: any = $state(null);
+	let mods = $state<Mod[]>([]);
+	let installedMods = $state<InstalledMod[]>([]);
+	let mod = $state<Mod | null>(null);
 
 	function handleModClick(mod: Mod) {
 		currentModView.set(mod);
 	}
-	const dispatch = createEventDispatcher<{
-		checkDependencies: {
+
+	const { onCheckDependencies } = $props<{
+		onCheckDependencies?: (event: {
 			steamodded: boolean;
 			talisman: boolean;
-		};
+		}) => void;
 	}>();
-
-	let installedMods: InstalledMod[] = [];
 
 	const getAllInstalledMods = async () => {
 		try {
@@ -118,7 +118,7 @@
 
 			// Only show popup if any required dependency is missing
 			if (!steamoddedInstalled || !talismanInstalled) {
-				dispatch("checkDependencies", {
+				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
 					talisman: mod.requires_talisman && !talismanInstalled,
 				});
@@ -154,14 +154,12 @@
 		return status;
 	};
 
-	$: {
+	$effect(() => {
 		if (mod) {
 			isModInstalled(mod);
 		}
-	}
-
-	let mod: Mod;
-	$: mod = $currentModView!;
+		mod = $currentModView!;
+	});
 
 	onMount(() => {
 		// Initialize the search index
@@ -216,17 +214,15 @@
 	function handleInput() {
 		handleSearch();
 	}
-
-
 </script>
 
 <div class="search-container">
 	<div class="search-bar">
-		<form on:submit|preventDefault={handleSearch}>
+		<form onsubmit={handleSearch}>
 			<input
 				type="text"
 				bind:value={searchQuery}
-				on:input={handleInput}
+				oninput={handleInput}
 				placeholder="Search mods... (Author or Title)"
 				class="search-input"
 			/>
@@ -245,8 +241,8 @@
 			{#each searchResults as mod}
 				<div
 					class="mod-card"
-					on:click={() => handleModClick(mod)}
-					on:keydown={(e) => e.key === "Enter" && handleModClick(mod)}
+					onclick={() => handleModClick(mod)}
+					onkeydown={(e) => e.key === "Enter" && handleModClick(mod)}
 					role="button"
 					tabindex="0"
 					style="--orig-color1: {mod.colors
@@ -275,7 +271,7 @@
 							class:installed={$installationStatus[mod.title]}
 							disabled={$installationStatus[mod.title] ||
 								$loadingStates[mod.title]}
-							on:click={() => installMod(mod)}
+							onclick={() => installMod(mod)}
 						>
 							{#if $loadingStates[mod.title]}
 								<div class="spinner"></div>
@@ -290,7 +286,7 @@
 							<button
 								class="delete-button"
 								title="Remove Mod"
-								on:click={() => uninstallMod(mod)}
+								onclick={() => uninstallMod(mod)}
 							>
 								<Trash2 size={18} />
 							</button>
