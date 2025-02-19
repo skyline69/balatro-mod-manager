@@ -41,6 +41,7 @@
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
+	import { currentPage, itemsPerPage } from "../../stores/modStore";
 
 	const loadingDots = writable(0);
 
@@ -586,6 +587,28 @@
 		currentSort.set(select.value as SortOption);
 	}
 	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+
+	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
+	$: paginatedMods = sortedAndFilteredMods.slice(
+		($currentPage - 1) * $itemsPerPage,
+		$currentPage * $itemsPerPage,
+	);
+
+	function nextPage() {
+		if ($currentPage < totalPages) {
+			currentPage.update((n) => n + 1);
+		}
+	}
+
+	function previousPage() {
+		if ($currentPage > 1) {
+			currentPage.update((n) => n - 1);
+		}
+	}
+
+	function goToPage(page: number) {
+		currentPage.set(page);
+	}
 </script>
 
 <div class="mods-container">
@@ -626,8 +649,36 @@
 					</select>
 				</div>
 			</div>
+			<div class="pagination-controls top-pagination">
+				<button
+					class="pagination-button"
+					on:click={previousPage}
+					disabled={$currentPage === 1}
+				>
+					Previous
+				</button>
+
+				{#each Array(totalPages) as _, i}
+					<button
+						class="pagination-button"
+						class:active={$currentPage === i + 1}
+						on:click={() => goToPage(i + 1)}
+					>
+						{i + 1}
+					</button>
+				{/each}
+
+				<button
+					class="pagination-button"
+					on:click={nextPage}
+					disabled={$currentPage === totalPages}
+				>
+					Next
+				</button>
+			</div>
+
 			<div class="mods-grid">
-				{#each sortedAndFilteredMods as mod}
+				{#each paginatedMods as mod}
 					<div
 						class="mod-card"
 						style="--orig-color1: {mod.colors
@@ -688,6 +739,33 @@
 					</div>
 				{/each}
 			</div>
+			<div class="pagination-controls">
+				<button
+					class="pagination-button"
+					on:click={previousPage}
+					disabled={$currentPage === 1}
+				>
+					Previous
+				</button>
+
+				{#each Array(totalPages) as _, i}
+					<button
+						class="pagination-button"
+						class:active={$currentPage === i + 1}
+						on:click={() => goToPage(i + 1)}
+					>
+						{i + 1}
+					</button>
+				{/each}
+
+				<button
+					class="pagination-button"
+					on:click={nextPage}
+					disabled={$currentPage === totalPages}
+				>
+					Next
+				</button>
+			</div>
 		</div>
 	{/if}
 </div>
@@ -705,6 +783,54 @@
 		width: 2px;
 		background: #f4eee0;
 		height: 100%;
+	}
+
+	.pagination-controls {
+		position: fixed;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1000;
+		background: #393646;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		padding: 0.5rem 1rem;
+		display: flex;
+		gap: 0.5rem;
+	}
+	.top-pagination {
+		top: 70px; /* Adjust based on your header height */
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.bottom-pagination {
+		bottom: 20px;
+		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.pagination-button {
+		padding: 0.5rem 1rem;
+		background: #ea9600;
+		border: 2px solid #f4eee0;
+		color: #f4eee0;
+		font-family: "M6X11", sans-serif;
+		cursor: pointer;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.pagination-button:hover:not(:disabled) {
+		background: #f4eee0;
+		color: #393646;
+	}
+
+	.pagination-button.active {
+		background: #f4eee0;
+		color: #393646;
+	}
+
+	.pagination-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.categories {
@@ -773,7 +899,8 @@
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
 		overflow-y: auto;
-		padding: 1rem;
+		/* padding: 1rem; */
+		padding: 80px 1rem 80px 1rem; /* Top padding for controls */
 
 		&::-webkit-scrollbar {
 			width: 10px;

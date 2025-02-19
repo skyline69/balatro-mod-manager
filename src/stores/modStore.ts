@@ -42,6 +42,8 @@ export const uninstallDialogStore = writable<UninstallDialogState>({
 
 export const selectedModStore = writable<{ name: string; path: string } | null>(null);
 export const dependentsStore = writable<string[]>([]);
+export const currentPage = writable(1);
+export const itemsPerPage = writable(12);
 
 export type UninstallResult = {
 	success: boolean;
