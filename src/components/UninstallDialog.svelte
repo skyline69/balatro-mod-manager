@@ -1,27 +1,27 @@
 <script lang="ts">
 	import { fade, scale } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
-	import { createEventDispatcher } from "svelte";
 	import { uninstallDialogStore } from "../stores/modStore";
 
-	const dispatch = createEventDispatcher();
+	// Use props for events and store
+	const { onUninstalled, onError } = $props<{
+		onUninstalled?: (event: {
+			detail: { modName: string; success: boolean; action: string };
+		}) => void;
+		onError?: (event: { detail: unknown }) => void;
+	}>();
 
-	export let show: boolean = false;
-	export let modName: string;
-	export let dependents: string[];
-	export let modPath: string;
+	// Reactive store access
+	const isCoreMod = $derived(
+		$uninstallDialogStore.modName?.toLowerCase() === "steamodded" ||
+			$uninstallDialogStore.modName?.toLowerCase() === "talisman",
+	);
 
 	let action: "cancel" | "force" | "cascade" | null = null;
 
-	uninstallDialogStore.subscribe((state) => {
-		show = state.show;
-		modName = state.modName;
-		modPath = state.modPath;
-		dependents = state.dependents;
-	});
-
 	async function handleUninstall() {
 		try {
+			const { modName, modPath } = $uninstallDialogStore;
 			let success = false;
 
 			if (action === "cascade") {
@@ -41,38 +41,38 @@
 				success = true;
 			}
 
-			if (success) {
-				dispatch("uninstalled", {
-					modName,
-					success: true,
-					action: action || "single",
+			if (success && onUninstalled) {
+				onUninstalled({
+					detail: {
+						modName,
+						success: true,
+						action: action || "single",
+					},
 				});
 			}
 		} catch (e) {
-			dispatch("error", e);
+			onError?.({ detail: e });
 		} finally {
 			uninstallDialogStore.update((s) => ({ ...s, show: false }));
 		}
 	}
+
 	function closeDialog() {
 		uninstallDialogStore.update((s) => ({ ...s, show: false }));
 	}
-	$: isCoreMod =
-		modName?.toLowerCase() === "steamodded" ||
-		modName?.toLowerCase() === "talisman";
 </script>
 
-{#if show && isCoreMod}
+{#if $uninstallDialogStore.show && isCoreMod}
 	<div class="dialog-overlay" transition:fade={{ duration: 100 }}>
 		<div class="dialog-content" transition:scale={{ duration: 200 }}>
-			<h2>Uninstall {modName}?</h2>
+			<h2>Uninstall {$uninstallDialogStore.modName}?</h2>
 
-			{#if dependents.length > 0}
+			{#if $uninstallDialogStore.dependents.length > 0}
 				<div class="dependency-list">
-					<h3>{modName} is required for:</h3>
+					<h3>{$uninstallDialogStore.modName} is required for:</h3>
 					<div class="scroll-container">
 						<ul>
-							{#each dependents as dependent}
+							{#each $uninstallDialogStore.dependents as dependent}
 								<li>{dependent}</li>
 							{/each}
 						</ul>
@@ -82,23 +82,24 @@
 				<div class="actions">
 					<button
 						class="confirm-button"
-						on:click={() => {
+						onclick={() => {
 							action = "cascade";
 							handleUninstall();
 						}}
 					>
-						Uninstall All ({dependents.length})
+						Uninstall All ({$uninstallDialogStore.dependents
+							.length})
 					</button>
 					<button
 						class="force-button"
-						on:click={() => {
+						onclick={() => {
 							action = "force";
 							handleUninstall();
 						}}
 					>
 						Force Remove Anyway
 					</button>
-					<button class="cancel-button" on:click={closeDialog}>
+					<button class="cancel-button" onclick={closeDialog}>
 						Cancel
 					</button>
 				</div>
@@ -106,12 +107,12 @@
 				<div class="actions">
 					<button
 						class="confirm-button"
-						on:click={() => {
+						onclick={() => {
 							action = null;
 							handleUninstall();
 						}}>Confirm</button
 					>
-					<button on:click={closeDialog} class="force-button"
+					<button onclick={closeDialog} class="force-button"
 						>Cancel</button
 					>
 				</div>
