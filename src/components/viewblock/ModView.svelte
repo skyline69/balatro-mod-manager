@@ -9,7 +9,7 @@
 		ArrowLeft,
 		Github,
 	} from "lucide-svelte";
-	import { onMount } from "svelte";
+	import { onMount, onDestroy } from "svelte";
 	import { open } from "@tauri-apps/plugin-shell";
 	import {
 		currentModView,
@@ -20,35 +20,26 @@
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { marked } from "marked";
 	import { invoke } from "@tauri-apps/api/core";
-	import { createEventDispatcher } from "svelte";
 	import { cachedVersions } from "../../stores/modStore";
-	import { onDestroy } from "svelte";
-
+	const VERSION_CACHE_DURATION = 60 * 60 * 1000;
+	const { mod, onCheckDependencies } = $props<{
+		mod: Mod;
+		onCheckDependencies?: (event: {
+			steamodded: boolean;
+			talisman: boolean;
+		}) => void;
+	}>();
+	let cachedVersionsValue: { steamodded: string[]; talisman: string[] };
+	cachedVersions.subscribe((value) => {
+		cachedVersionsValue = value;
+	});
+	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
 	function handleAuxClick(event: MouseEvent) {
-		// Back button (typically button 3)
 		if (event.button === 3) {
 			event.preventDefault();
 			handleClose();
 		}
 	}
-
-	const VERSION_CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
-
-	const dispatch = createEventDispatcher<{
-		checkDependencies: {
-			steamodded: boolean;
-			talisman: boolean;
-		};
-	}>();
-
-	let cachedVersionsValue: { steamodded: string[]; talisman: string[] };
-
-	cachedVersions.subscribe((value) => {
-		cachedVersionsValue = value;
-	});
-
-	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
-
 	async function openImagePopup() {
 		if (!isDefaultCover(mod.image)) {
 			await invoke("open_image_popup", {
@@ -57,93 +48,85 @@
 			});
 		}
 	}
-
 	let installedMods: InstalledMod[] = [];
-	let steamoddedVersions: string[] = [];
-	let talismanVersions: string[] = [];
-	let selectedVersion: string = "newest";
-	let loadingVersions = false;
+	let steamoddedVersions = $state<string[]>([]);
+	let talismanVersions = $state<string[]>([]);
+	let selectedVersion = $state("newest");
+	let loadingVersions = $state(false);
+	let renderedDescription = $state("");
+
 	let versionLoadStarted = false;
 	let prevModTitle = "";
 
 	async function loadSteamoddedVersions() {
 		if (loadingVersions) return;
-
 		try {
-			// Check disk cache first
 			const cached = await invoke<[string[], number]>(
 				"load_versions_cache",
-				{
-					modType: "steamodded",
-				},
+				{ modType: "steamodded" },
 			);
-
-			if (
-				cached &&
-				Date.now() - cached[1] * 1000 < VERSION_CACHE_DURATION
-			) {
-				steamoddedVersions = cached[0];
-				selectedVersion = "newest"; // Force "newest" as default
-				if (steamoddedVersions.length > 0) {
-					selectedVersion = steamoddedVersions[0];
+			if (cached) {
+				const [cachedVers, cachedTs] = cached;
+				if (Date.now() - cachedTs * 1000 < VERSION_CACHE_DURATION) {
+					steamoddedVersions = cachedVers;
+					selectedVersion = "newest";
+					if (steamoddedVersions.length > 0) {
+						selectedVersion = steamoddedVersions[0];
+					}
+					cachedVersions.update((c) => ({
+						...c,
+						steamodded: cachedVers,
+					}));
+					return;
 				}
-				cachedVersions.update((c) => ({ ...c, steamodded: cached[0] }));
-				return;
 			}
-		} catch (error) {
-			console.log("Version cache check failed:", error);
+		} catch (e) {
+			console.log("Version cache check failed:", e);
 		}
-
 		loadingVersions = true;
 		try {
 			const versions: string[] = await invoke("get_steamodded_versions");
 			steamoddedVersions = versions;
-
 			selectedVersion = "newest";
-
-
-			// Update cache
+			if (versions.length > 0) {
+				selectedVersion = versions[0];
+			}
 			cachedVersions.update((c) => ({ ...c, steamodded: versions }));
 			await invoke("save_versions_cache", {
 				modType: "steamodded",
-				versions: versions,
+				versions,
 			});
-		} catch (error) {
-			console.error("Failed to load Steamodded versions:", error);
+		} catch (e) {
+			console.error("Failed to load Steamodded versions:", e);
 			steamoddedVersions = [];
 		} finally {
 			loadingVersions = false;
 		}
 	}
-
 	async function loadTalismanVersions() {
 		if (loadingVersions) return;
-
 		try {
-			// Check disk cache first
 			const cached = await invoke<[string[], number]>(
 				"load_versions_cache",
 				{ modType: "talisman" },
 			);
-
 			if (cached) {
-				const [versions, timestamp] = cached;
-				if (Date.now() - timestamp * 1000 < VERSION_CACHE_DURATION) {
-					talismanVersions = versions;
-					if (versions.length > 0) {
-						selectedVersion = versions[0];
+				const [cachedVers, cachedTs] = cached;
+				if (Date.now() - cachedTs * 1000 < VERSION_CACHE_DURATION) {
+					talismanVersions = cachedVers;
+					if (cachedVers.length > 0) {
+						selectedVersion = cachedVers[0];
 					}
 					cachedVersions.update((c) => ({
 						...c,
-						talisman: versions,
+						talisman: cachedVers,
 					}));
 					return;
 				}
 			}
-		} catch (error) {
-			console.log("Version cache check failed:", error);
+		} catch (e) {
+			console.log("Version cache check failed:", e);
 		}
-
 		loadingVersions = true;
 		try {
 			const versions: string[] = await invoke("get_talisman_versions");
@@ -151,15 +134,13 @@
 			if (versions.length > 0) {
 				selectedVersion = versions[0];
 			}
-
-			// Update cache
 			cachedVersions.update((c) => ({ ...c, talisman: versions }));
 			await invoke("save_versions_cache", {
 				modType: "talisman",
-				versions: versions,
+				versions,
 			});
-		} catch (error) {
-			console.error("Failed to load Talisman versions:", error);
+		} catch (e) {
+			console.error("Failed to load Talisman versions:", e);
 			talismanVersions = [];
 		} finally {
 			loadingVersions = false;
@@ -170,36 +151,28 @@
 			const installed: InstalledMod[] = await invoke(
 				"get_installed_mods_from_db",
 			);
-			installedMods = installed.map((mod) => {
-				return {
-					name: mod.name,
-					path: mod.path,
-					// collection_hash: mod.collection_hash,
-				};
-			});
-		} catch (error) {
-			console.error("Failed to get installed mods:", error);
+			installedMods = installed.map((m) => ({
+				name: m.name,
+				path: m.path,
+			}));
+		} catch (e) {
+			console.error("Failed to get installed mods:", e);
 		}
 	};
-
 	const uninstallMod = async (mod: Mod) => {
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
-
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name === mod.title,
 			);
 			if (!installedMod) return;
-
 			if (isCoreMod) {
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
-
-				// Add this line to show the uninstall dialog
 				uninstallDialogStore.set({
 					show: true,
 					modName: mod.title,
@@ -207,7 +180,6 @@
 					dependents,
 				});
 			} else {
-				// Direct uninstall for non-core mods
 				await invoke("remove_installed_mod", {
 					name: mod.title,
 					path: installedMod.path,
@@ -217,18 +189,15 @@
 					[mod.title]: false,
 				}));
 			}
-		} catch (error) {
-			console.error("Failed to uninstall mod:", error);
+		} catch (e) {
+			console.error("Failed to uninstall mod:", e);
 		}
 	};
 	const installMod = async (mod: Mod) => {
-		// Collect dependencies first
 		const dependencies = [];
 		if (mod.requires_steamodded) dependencies.push("Steamodded");
 		if (mod.requires_talisman) dependencies.push("Talisman");
-
 		if (mod.requires_steamodded || mod.requires_talisman) {
-			// Check if dependencies are installed before showing popup
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Steamodded",
@@ -239,23 +208,18 @@
 						modType: "Talisman",
 					})
 				: true;
-
-			// Only show popup if any required dependency is missing
 			if (!steamoddedInstalled || !talismanInstalled) {
-				dispatch("checkDependencies", {
+				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
 					talisman: mod.requires_talisman && !talismanInstalled,
 				});
 				return;
 			}
 		}
-
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-
 			if (mod.title.toLowerCase() === "steamodded") {
 				let installedPath;
-
 				if (selectedVersion === "newest") {
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
@@ -263,31 +227,25 @@
 				} else {
 					installedPath = await invoke<string>(
 						"install_steamodded_version",
-						{
-							version: selectedVersion,
-						},
+						{ version: selectedVersion },
 					);
 				}
-
 				const pathExists = await invoke("verify_path_exists", {
 					path: installedPath,
 				});
-				if (!pathExists) {
+				if (!pathExists)
 					throw new Error(
 						"Installation failed - files not found at destination",
 					);
-				}
-
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					dependencies: dependencies, // Steamodded has no dependencies
+					dependencies,
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 			} else if (mod.title.toLowerCase() === "talisman") {
 				let installedPath;
-
 				if (selectedVersion === "newest") {
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
@@ -295,25 +253,20 @@
 				} else {
 					installedPath = await invoke<string>(
 						"install_talisman_version",
-						{
-							version: selectedVersion,
-						},
+						{ version: selectedVersion },
 					);
 				}
-
 				const pathExists = await invoke("verify_path_exists", {
 					path: installedPath,
 				});
-				if (!pathExists) {
+				if (!pathExists)
 					throw new Error(
 						"Installation failed - files not found at destination",
 					);
-				}
-
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					dependencies: [], // Talisman has no dependencies
+					dependencies: [],
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
@@ -321,29 +274,26 @@
 				const installedPath = await invoke<string>("install_mod", {
 					url: mod.downloadURL,
 				});
-
 				await invoke("add_installed_mod", {
 					name: mod.title,
 					path: installedPath,
-					dependencies: dependencies,
+					dependencies,
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 			}
-		} catch (error) {
-			console.error("Failed to install mod:", error);
+		} catch (e) {
+			console.error("Failed to install mod:", e);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
-
 	function handleMarkdownClick(event: MouseEvent | KeyboardEvent) {
 		const anchor = (event.target as HTMLElement).closest("a");
 		if (anchor && anchor.href.startsWith("http")) {
 			event.preventDefault();
-			// Open the link using your Tauri API
-			open(anchor.href).catch((error) =>
-				console.error("Failed to open link:", error),
+			open(anchor.href).catch((e) =>
+				console.error("Failed to open link:", e),
 			);
 		}
 	}
@@ -353,13 +303,7 @@
 		installationStatus.update((s) => ({ ...s, [mod.title]: status }));
 		return status;
 	};
-
-	export let mod: Mod;
-
-	// $: mod = $currentModView!;
-	let renderedDescription = "";
-
-	$: {
+	$effect(() => {
 		if (mod?.description) {
 			Promise.resolve(marked(mod.description)).then((result) => {
 				renderedDescription = result;
@@ -367,12 +311,10 @@
 		} else {
 			renderedDescription = "";
 		}
-	}
-
+	});
 	function handleClose() {
 		currentModView.set(null);
 	}
-
 	onMount(async () => {
 		window.addEventListener("auxclick", handleAuxClick);
 		if (mod) {
@@ -380,8 +322,7 @@
 			await isModInstalled(mod);
 		}
 	});
-
-	$: {
+	$effect(() => {
 		const currentModTitle = mod?.title?.toLowerCase();
 		if (
 			currentModTitle === "steamodded" &&
@@ -404,16 +345,13 @@
 				versionLoadStarted = false;
 			});
 		}
-	}
-
+	});
 	onDestroy(async () => {
 		window.removeEventListener("auxclick", handleAuxClick);
-		// Optional: Clear memory cache if needed
 		cachedVersions.set({ steamodded: [], talisman: [] });
 	});
 </script>
 
-<!-- Add keyboard navigation support as fallback -->
 <svelte:window
 	on:keydown={(e) => {
 		if (e.key === "Backspace" || e.key === "Escape") {
@@ -427,21 +365,18 @@
 		class="mod-view"
 		transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
 	>
-		<button class="back-button" on:click={handleClose}>
-			<ArrowLeft size={20} />
-			<span>Back</span>
+		<button class="back-button" onclick={handleClose}>
+			<ArrowLeft size={20} /> <span>Back</span>
 		</button>
-
 		<div class="mod-content">
 			<h2>{mod.title}</h2>
-
 			<div class="content-grid">
 				<div class="left-column">
 					<div class="image-container">
 						{#if !isDefaultCover(mod.image)}
 							<button
 								class="image-button"
-								on:click={openImagePopup}
+								onclick={openImagePopup}
 								aria-label={`View full size image of ${mod.title}`}
 							>
 								<img
@@ -459,14 +394,13 @@
 							/>
 						{/if}
 					</div>
-
 					<div class="button-container">
 						<button
 							class="download-button"
 							class:installed={$installationStatus[mod.title]}
 							disabled={$installationStatus[mod.title] ||
 								$loadingStates[mod.title]}
-							on:click={() => installMod(mod)}
+							onclick={() => installMod(mod)}
 						>
 							{#if $loadingStates[mod.title]}
 								<div class="spinner"></div>
@@ -481,7 +415,7 @@
 							<button
 								class="delete-button"
 								title="Remove Mod"
-								on:click={() => uninstallMod(mod)}
+								onclick={() => uninstallMod(mod)}
 							>
 								<Trash2 size={18} />
 							</button>
@@ -514,7 +448,6 @@
 							{/if}
 						</div>
 					{/if}
-
 					{#if mod.title.toLowerCase() === "steamodded" && !$installationStatus[mod.title]}
 						<div class="version-selector">
 							{#if loadingVersions}
@@ -546,25 +479,22 @@
 						<span><Clock size={16} /> {mod.lastUpdated}</span>
 						<span><User size={16} /> {mod.publisher}</span>
 					</div>
-
 					{#if mod.repo}
 						<button
-							on:click={() => open(mod.repo)}
+							onclick={() => open(mod.repo)}
 							class="repo-button"
 						>
-							<Github size={16} />
-							Repository
+							<Github size={16} /> Repository
 						</button>
 					{/if}
 				</div>
-
 				<div class="right-column">
 					<div
 						class="description"
 						role="button"
 						tabindex="0"
-						on:click|self={handleMarkdownClick}
-						on:keydown|self={(e) => {
+						onclick={handleMarkdownClick}
+						onkeydown={(e) => {
 							if (e.key === "Enter" || e.key === " ") {
 								handleMarkdownClick(e);
 							}
