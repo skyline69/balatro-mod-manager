@@ -88,9 +88,8 @@
 			const versions: string[] = await invoke("get_steamodded_versions");
 			steamoddedVersions = versions;
 			selectedVersion = "newest";
-			if (versions.length > 0) {
-				selectedVersion = versions[0];
-			}
+
+			// Update cache
 			cachedVersions.update((c) => ({ ...c, steamodded: versions }));
 			await invoke("save_versions_cache", {
 				modType: "steamodded",
