@@ -634,49 +634,48 @@
 		<SearchView />
 	{:else}
 		<div class="mods-wrapper">
-			<div class="sort-controls">
-				<div class="sort-wrapper">
-					<ArrowUpDown size={16} />
-					<select value={$currentSort} on:change={handleSortChange}>
-						<option value={SortOption.NameAsc}>Name (A-Z)</option>
-						<option value={SortOption.NameDesc}>Name (Z-A)</option>
-						<option value={SortOption.LastUpdatedDesc}
-							>Latest Updated</option
+			<div class="controls-container">
+				<div class="pagination-controls">
+					<button
+						on:click={previousPage}
+						disabled={$currentPage === 1}>Previous</button
+					>
+					{#each Array(totalPages) as _, i}
+						<button
+							class:active={$currentPage === i + 1}
+							on:click={() => goToPage(i + 1)}
 						>
-						<option value={SortOption.LastUpdatedAsc}
-							>Oldest Updated</option
+							{i + 1}
+						</button>
+					{/each}
+					<button
+						on:click={nextPage}
+						disabled={$currentPage === totalPages}>Next</button
+					>
+				</div>
+				<div class="sort-controls">
+					<div class="sort-wrapper">
+						<ArrowUpDown size={16} />
+						<select
+							value={$currentSort}
+							on:change={handleSortChange}
 						>
-					</select>
+							<option value={SortOption.NameAsc}
+								>Name (A-Z)</option
+							>
+							<option value={SortOption.NameDesc}
+								>Name (Z-A)</option
+							>
+							<option value={SortOption.LastUpdatedDesc}
+								>Latest Updated</option
+							>
+							<option value={SortOption.LastUpdatedAsc}
+								>Oldest Updated</option
+							>
+						</select>
+					</div>
 				</div>
 			</div>
-			<div class="pagination-controls top-pagination">
-				<button
-					class="pagination-button"
-					on:click={previousPage}
-					disabled={$currentPage === 1}
-				>
-					Previous
-				</button>
-
-				{#each Array(totalPages) as _, i}
-					<button
-						class="pagination-button"
-						class:active={$currentPage === i + 1}
-						on:click={() => goToPage(i + 1)}
-					>
-						{i + 1}
-					</button>
-				{/each}
-
-				<button
-					class="pagination-button"
-					on:click={nextPage}
-					disabled={$currentPage === totalPages}
-				>
-					Next
-				</button>
-			</div>
-
 			<div class="mods-grid">
 				{#each paginatedMods as mod}
 					<div
@@ -739,33 +738,6 @@
 					</div>
 				{/each}
 			</div>
-			<div class="pagination-controls">
-				<button
-					class="pagination-button"
-					on:click={previousPage}
-					disabled={$currentPage === 1}
-				>
-					Previous
-				</button>
-
-				{#each Array(totalPages) as _, i}
-					<button
-						class="pagination-button"
-						class:active={$currentPage === i + 1}
-						on:click={() => goToPage(i + 1)}
-					>
-						{i + 1}
-					</button>
-				{/each}
-
-				<button
-					class="pagination-button"
-					on:click={nextPage}
-					disabled={$currentPage === totalPages}
-				>
-					Next
-				</button>
-			</div>
 		</div>
 	{/if}
 </div>
@@ -786,28 +758,21 @@
 	}
 
 	.pagination-controls {
-		position: fixed;
+		position: absolute;
+		top: 0.05rem;
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 1000;
-		background: #393646;
+		background: #c14139;
 		border: 2px solid #f4eee0;
 		border-radius: 8px;
 		padding: 0.5rem 1rem;
 		display: flex;
 		gap: 0.5rem;
-	}
-	.top-pagination {
-		top: 70px; /* Adjust based on your header height */
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 
-	.bottom-pagination {
-		bottom: 20px;
-		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.pagination-button {
+	.pagination-controls button {
 		padding: 0.5rem 1rem;
 		background: #ea9600;
 		border: 2px solid #f4eee0;
@@ -818,19 +783,27 @@
 		transition: all 0.2s ease;
 	}
 
-	.pagination-button:hover:not(:disabled) {
+	.pagination-controls button:hover:not(:disabled) {
 		background: #f4eee0;
 		color: #393646;
 	}
 
-	.pagination-button.active {
+	.pagination-controls button.active {
 		background: #f4eee0;
 		color: #393646;
 	}
 
-	.pagination-button:disabled {
+	.pagination-controls button:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.controls-container {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+		padding: 0 1rem;
 	}
 
 	.categories {
@@ -899,8 +872,6 @@
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
 		overflow-y: auto;
-		/* padding: 1rem; */
-		padding: 80px 1rem 80px 1rem; /* Top padding for controls */
 
 		&::-webkit-scrollbar {
 			width: 10px;
@@ -956,14 +927,24 @@
 	}
 
 	.sort-controls {
-		position: fixed;
-		top: 2.3rem; /* Increased from 2rem */
-		right: 3rem; /* Increased from 2.5rem */
+		position: absolute;
+		top: 0.25rem; /* Increased from 2rem */
+		right: 1rem; /* Increased from 2.5rem */
 		z-index: 1000;
 		margin: 0;
 		background: transparent;
-		transform: translateY(0); /* Reset any transforms */
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		/* transform: translateY(0); /* Reset any transforms */
 	}
+	/**/
+	/* 	.sort-controls { */
+	/*     position: absolute; */
+	/*     top: 1rem; */
+	/*     right: 3rem; */
+	/*     z-index: 1000; */
+	/*     margin: 0; */
+	/*     background: transparent; */
+	/* } */
 
 	.sort-wrapper {
 		background: #ea9600;
