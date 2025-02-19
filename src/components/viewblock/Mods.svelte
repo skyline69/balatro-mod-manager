@@ -13,6 +13,7 @@
 		BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
+	import { fly } from "svelte/transition";
 	import { tick } from "svelte";
 	import {
 		SortOption,
@@ -41,6 +42,7 @@
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
+	import { currentPage, itemsPerPage } from "../../stores/modStore";
 
 	const loadingDots = writable(0);
 
@@ -538,6 +540,8 @@
 	});
 
 	function handleCategoryClick(category: string) {
+		currentPage.set(1);
+		startPage = 1; // Reset sliding window
 		currentCategory.set(category);
 	}
 
@@ -586,6 +590,42 @@
 		currentSort.set(select.value as SortOption);
 	}
 	$: sortedAndFilteredMods = sortMods(filteredMods, $currentSort);
+
+	$: totalPages = Math.ceil(sortedAndFilteredMods.length / $itemsPerPage);
+	$: paginatedMods = sortedAndFilteredMods.slice(
+		($currentPage - 1) * $itemsPerPage,
+		$currentPage * $itemsPerPage,
+	);
+
+	const maxVisiblePages = 5;
+	let startPage = 1;
+
+	function updatePaginationWindow() {
+		if ($currentPage > startPage + maxVisiblePages - 1) {
+			startPage = $currentPage - maxVisiblePages + 1;
+		} else if ($currentPage < startPage) {
+			startPage = $currentPage;
+		}
+	}
+
+	function nextPage() {
+		if ($currentPage < totalPages) {
+			currentPage.update((n) => n + 1);
+			updatePaginationWindow();
+		}
+	}
+
+	function previousPage() {
+		if ($currentPage > 1) {
+			currentPage.update((n) => n - 1);
+			updatePaginationWindow();
+		}
+	}
+
+	function goToPage(page: number) {
+		currentPage.set(page);
+		updatePaginationWindow();
+	}
 </script>
 
 <div class="mods-container">
@@ -611,23 +651,60 @@
 		<SearchView />
 	{:else}
 		<div class="mods-wrapper">
-			<div class="sort-controls">
-				<div class="sort-wrapper">
-					<ArrowUpDown size={16} />
-					<select value={$currentSort} on:change={handleSortChange}>
-						<option value={SortOption.NameAsc}>Name (A-Z)</option>
-						<option value={SortOption.NameDesc}>Name (Z-A)</option>
-						<option value={SortOption.LastUpdatedDesc}
-							>Latest Updated</option
+			<div class="controls-container">
+				<div
+					class="pagination-controls"
+					in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+				>
+					<button
+						on:click={previousPage}
+						disabled={$currentPage === 1}
+					>
+						Previous
+					</button>
+
+					{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
+						{#if startPage + i <= totalPages}
+							<button
+								class:active={$currentPage === startPage + i}
+								on:click={() => goToPage(startPage + i)}
+							>
+								{startPage + i}
+							</button>
+						{/if}
+					{/each}
+					<button
+						on:click={nextPage}
+						disabled={$currentPage === totalPages}
+					>
+						Next
+					</button>
+				</div>
+				<div class="sort-controls">
+					<div class="sort-wrapper">
+						<ArrowUpDown size={16} />
+						<select
+							value={$currentSort}
+							on:change={handleSortChange}
 						>
-						<option value={SortOption.LastUpdatedAsc}
-							>Oldest Updated</option
-						>
-					</select>
+							<option value={SortOption.NameAsc}
+								>Name (A-Z)</option
+							>
+							<option value={SortOption.NameDesc}
+								>Name (Z-A)</option
+							>
+							<option value={SortOption.LastUpdatedDesc}
+								>Latest Updated</option
+							>
+							<option value={SortOption.LastUpdatedAsc}
+								>Oldest Updated</option
+							>
+						</select>
+					</div>
 				</div>
 			</div>
 			<div class="mods-grid">
-				{#each sortedAndFilteredMods as mod}
+				{#each paginatedMods as mod}
 					<div
 						class="mod-card"
 						style="--orig-color1: {mod.colors
@@ -707,6 +784,56 @@
 		height: 100%;
 	}
 
+	.pagination-controls {
+		position: absolute;
+		top: 0.05rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1000;
+		background: #c14139;
+		border: 2px solid #f4eee0;
+		border-radius: 8px;
+		padding: 0.5rem 1rem;
+		display: flex;
+		gap: 0.5rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.pagination-controls button {
+		padding: 0.5rem 1rem;
+		background: #ea9600;
+		border: 2px solid #f4eee0;
+		color: #f4eee0;
+		font-family: "M6X11", sans-serif;
+		font-size: 0.8rem;
+		cursor: pointer;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.pagination-controls button:hover:not(:disabled) {
+		background: #f4eee0;
+		color: #393646;
+	}
+
+	.pagination-controls button.active {
+		background: #f4eee0;
+		color: #393646;
+	}
+
+	.pagination-controls button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.controls-container {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+		padding: 0 1rem;
+	}
+
 	.categories {
 		width: 190px;
 		display: flex;
@@ -773,7 +900,6 @@
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
 		overflow-y: auto;
-		padding: 1rem;
 
 		&::-webkit-scrollbar {
 			width: 10px;
@@ -829,14 +955,24 @@
 	}
 
 	.sort-controls {
-		position: fixed;
-		top: 2.3rem; /* Increased from 2rem */
-		right: 3rem; /* Increased from 2.5rem */
+		position: absolute;
+		top: 0.25rem; /* Increased from 2rem */
+		right: 1rem; /* Increased from 2.5rem */
 		z-index: 1000;
 		margin: 0;
 		background: transparent;
-		transform: translateY(0); /* Reset any transforms */
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		/* transform: translateY(0); /* Reset any transforms */
 	}
+	/**/
+	/* 	.sort-controls { */
+	/*     position: absolute; */
+	/*     top: 1rem; */
+	/*     right: 3rem; */
+	/*     z-index: 1000; */
+	/*     margin: 0; */
+	/*     background: transparent; */
+	/* } */
 
 	.sort-wrapper {
 		background: #ea9600;
@@ -1086,109 +1222,20 @@
 		cursor: not-allowed;
 	}
 
-	/* Add these media queries at the end of the style section */
-	@media (max-width: 768px) {
-		.mods-container {
-			flex-direction: column;
-			gap: 0.5rem;
+	@media (max-width: 1160px) {
+		.pagination-controls button {
+			min-width: 3rem;
+			padding: 0.4rem 0.6rem;
+			font-size: 0.75rem;
 		}
 
-		.categories {
-			width: 100%;
-			flex-direction: row;
-			overflow-x: auto;
-			padding-bottom: 0.5rem;
-			height: auto;
+		.pagination-controls {
+			top: 0.25rem;
+			left: 35%;
 		}
 
-		.categories button {
-			flex-shrink: 0;
-			padding: 0.75rem;
-			font-size: 0.9rem;
-		}
-
-		.separator {
-			width: 100%;
-			height: 2px;
-			margin: 0.5rem 0;
-		}
-
-		.sort-controls {
-			position: sticky;
-			top: 0;
-			right: auto;
-			left: 50%;
-			transform: translateX(-50%);
-			width: fit-content;
-			margin: 0.5rem auto;
-			z-index: 1000;
-		}
-
-		.mods-grid {
-			padding-top: 70px;
-			grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-			gap: 20px;
-			padding: 0.5rem;
-		}
-
-		.mod-card {
-			width: 100%;
-			max-width: 280px;
-			height: 300px;
-		}
-
-		.mod-image {
-			height: 130px;
-		}
-
-		.mod-info h3 {
-			font-size: 1.3rem;
-		}
-
-		.mod-info p {
-			font-size: 0.9rem;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.sort-controls {
-			top: 0.5rem;
-		}
-
-		.sort-wrapper {
-			padding: 0.4rem;
-		}
-
-		select {
-			font-size: 0.9rem;
-			padding-right: 1.2rem;
-		}
-
-		.mods-grid {
-			grid-template-columns: 1fr;
-			padding: 0.5rem;
-		}
-
-		.mod-card {
-			height: auto;
-			min-height: 280px;
-		}
-
-		.button-container {
-			position: relative;
-			bottom: auto;
-			left: auto;
-			margin-top: 0.5rem;
-		}
-
-		.download-button {
-			position: relative;
-			bottom: auto;
-			left: auto;
-		}
-
-		.tags {
-			top: 6rem;
+		.controls-container {
+			margin-bottom: 0.5rem;
 		}
 	}
 </style>
