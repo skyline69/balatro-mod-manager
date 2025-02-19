@@ -594,20 +594,34 @@
 		$currentPage * $itemsPerPage,
 	);
 
+	const maxVisiblePages = 5;
+	let startPage = 1;
+
+	function updatePaginationWindow() {
+		if ($currentPage > startPage + maxVisiblePages - 1) {
+			startPage = $currentPage - maxVisiblePages + 1;
+		} else if ($currentPage < startPage) {
+			startPage = $currentPage;
+		}
+	}
+
 	function nextPage() {
 		if ($currentPage < totalPages) {
 			currentPage.update((n) => n + 1);
+			updatePaginationWindow();
 		}
 	}
 
 	function previousPage() {
 		if ($currentPage > 1) {
 			currentPage.update((n) => n - 1);
+			updatePaginationWindow();
 		}
 	}
 
 	function goToPage(page: number) {
 		currentPage.set(page);
+		updatePaginationWindow();
 	}
 </script>
 
@@ -637,21 +651,32 @@
 			<div class="controls-container">
 				<div class="pagination-controls">
 					<button
+						class="pagination-button"
 						on:click={previousPage}
-						disabled={$currentPage === 1}>Previous</button
+						disabled={$currentPage === 1}
 					>
-					{#each Array(totalPages) as _, i}
-						<button
-							class:active={$currentPage === i + 1}
-							on:click={() => goToPage(i + 1)}
-						>
-							{i + 1}
-						</button>
+						Previous
+					</button>
+
+					{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
+						{#if startPage + i <= totalPages}
+							<button
+								class="pagination-button"
+								class:active={$currentPage === startPage + i}
+								on:click={() => goToPage(startPage + i)}
+							>
+								{startPage + i}
+							</button>
+						{/if}
 					{/each}
+
 					<button
+						class="pagination-button"
 						on:click={nextPage}
-						disabled={$currentPage === totalPages}>Next</button
+						disabled={$currentPage === totalPages}
 					>
+						Next
+					</button>
 				</div>
 				<div class="sort-controls">
 					<div class="sort-wrapper">
