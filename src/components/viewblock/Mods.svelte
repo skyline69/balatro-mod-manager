@@ -13,6 +13,7 @@
 		BookOpen,
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
+	import { fly } from "svelte/transition";
 	import { tick } from "svelte";
 	import {
 		SortOption,
@@ -649,9 +650,11 @@
 	{:else}
 		<div class="mods-wrapper">
 			<div class="controls-container">
-				<div class="pagination-controls">
+				<div
+					class="pagination-controls"
+					in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+				>
 					<button
-						class="pagination-button"
 						on:click={previousPage}
 						disabled={$currentPage === 1}
 					>
@@ -661,7 +664,6 @@
 					{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
 						{#if startPage + i <= totalPages}
 							<button
-								class="pagination-button"
 								class:active={$currentPage === startPage + i}
 								on:click={() => goToPage(startPage + i)}
 							>
@@ -669,9 +671,7 @@
 							</button>
 						{/if}
 					{/each}
-
 					<button
-						class="pagination-button"
 						on:click={nextPage}
 						disabled={$currentPage === totalPages}
 					>
@@ -803,6 +803,7 @@
 		border: 2px solid #f4eee0;
 		color: #f4eee0;
 		font-family: "M6X11", sans-serif;
+		font-size: 0.8rem;
 		cursor: pointer;
 		border-radius: 4px;
 		transition: all 0.2s ease;
@@ -1220,108 +1221,21 @@
 	}
 
 	/* Add these media queries at the end of the style section */
-	@media (max-width: 768px) {
-		.mods-container {
-			flex-direction: column;
-			gap: 0.5rem;
+
+	@media (max-width: 1160px) {
+		.pagination-controls button {
+			min-width: 3rem;
+			padding: 0.4rem 0.6rem;
+			font-size: 0.75rem;
 		}
 
-		.categories {
-			width: 100%;
-			flex-direction: row;
-			overflow-x: auto;
-			padding-bottom: 0.5rem;
-			height: auto;
+		.pagination-controls {
+			top: 0.25rem;
+			left: 35%;
 		}
 
-		.categories button {
-			flex-shrink: 0;
-			padding: 0.75rem;
-			font-size: 0.9rem;
-		}
-
-		.separator {
-			width: 100%;
-			height: 2px;
-			margin: 0.5rem 0;
-		}
-
-		.sort-controls {
-			position: sticky;
-			top: 0;
-			right: auto;
-			left: 50%;
-			transform: translateX(-50%);
-			width: fit-content;
-			margin: 0.5rem auto;
-			z-index: 1000;
-		}
-
-		.mods-grid {
-			padding-top: 70px;
-			grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-			gap: 20px;
-			padding: 0.5rem;
-		}
-
-		.mod-card {
-			width: 100%;
-			max-width: 280px;
-			height: 300px;
-		}
-
-		.mod-image {
-			height: 130px;
-		}
-
-		.mod-info h3 {
-			font-size: 1.3rem;
-		}
-
-		.mod-info p {
-			font-size: 0.9rem;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.sort-controls {
-			top: 0.5rem;
-		}
-
-		.sort-wrapper {
-			padding: 0.4rem;
-		}
-
-		select {
-			font-size: 0.9rem;
-			padding-right: 1.2rem;
-		}
-
-		.mods-grid {
-			grid-template-columns: 1fr;
-			padding: 0.5rem;
-		}
-
-		.mod-card {
-			height: auto;
-			min-height: 280px;
-		}
-
-		.button-container {
-			position: relative;
-			bottom: auto;
-			left: auto;
-			margin-top: 0.5rem;
-		}
-
-		.download-button {
-			position: relative;
-			bottom: auto;
-			left: auto;
-		}
-
-		.tags {
-			top: 6rem;
+		.controls-container {
+			margin-bottom: 0.5rem;
 		}
 	}
 </style>
