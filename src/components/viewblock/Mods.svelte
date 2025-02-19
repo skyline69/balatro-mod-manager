@@ -540,6 +540,7 @@
 	});
 
 	function handleCategoryClick(category: string) {
+		currentPage.set(1);
 		currentCategory.set(category);
 	}
 
@@ -1219,8 +1220,6 @@
 		opacity: 0.8;
 		cursor: not-allowed;
 	}
-
-	/* Add these media queries at the end of the style section */
 
 	@media (max-width: 1160px) {
 		.pagination-controls button {
