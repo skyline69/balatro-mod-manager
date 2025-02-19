@@ -541,6 +541,7 @@
 
 	function handleCategoryClick(category: string) {
 		currentPage.set(1);
+		startPage = 1; // Reset sliding window
 		currentCategory.set(category);
 	}
 
