@@ -29,6 +29,7 @@ dirs = "6.0.0"
 tauri-plugin-fs = "2"
 log = "0.4.25"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+git2 = "0.20.0"
 
 [dev-dependencies]
 tempfile = "3.16.0"

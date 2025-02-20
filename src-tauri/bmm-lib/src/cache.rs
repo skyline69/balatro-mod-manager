@@ -63,6 +63,21 @@ pub enum Category {
     API = 6,
 }
 
+impl From<std::string::String> for Category {
+    fn from(value: std::string::String) -> Self {
+        match value.as_str() {
+            "Content" => Category::Content,
+            "Joker" => Category::Joker,
+            "Quality of Life" => Category::QualityOfLife,
+            "Technical" => Category::Technical,
+            "Miscellaneous" => Category::Miscellaneous,
+            "Resource Packs" => Category::ResourcePacks,
+            "API" => Category::API,
+            _ => panic!("Invalid category: {}", value),
+        }
+    }
+}
+
 impl From<i32> for Category {
     fn from(value: i32) -> Self {
         match value {

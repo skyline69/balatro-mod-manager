@@ -257,7 +257,7 @@
 						<div class="tags">
 							<span class="tag updated">
 								<Clock size={13} />
-								{mod.lastUpdated}
+								{mod.last_updated}
 							</span>
 						</div>
 					</div>

@@ -6,13 +6,16 @@ export interface Mod {
 	image: string;
 	lastUpdated: string;
 	categories: Category[];
-	colors: { color1: string; color2: string };
-	installed: boolean;
+	colors: {
+		color1: string;
+		color2: string;
+	};
 	requires_steamodded: boolean;
 	requires_talisman: boolean;
 	publisher: string;
 	repo: string;
 	downloadURL: string;
+	installed: boolean;
 }
 
 export enum SortOption {

@@ -26,7 +26,7 @@ pub enum AppError {
     },
     FileNotFound {
         path: PathBuf,
-        source: String
+        source: String,
     },
     DirCreate {
         path: PathBuf,
@@ -55,6 +55,7 @@ pub enum AppError {
         mod_name: String,
         version: String,
     },
+    GitOperation(String),
 
     // Network/API
     NetworkRequest {
@@ -91,6 +92,10 @@ pub enum AppError {
         format: String,
         source: String,
     },
+    JsonParse {
+        path: PathBuf,
+        source: String,
+    },
 
     // Network
     Network(String),
@@ -98,6 +103,7 @@ pub enum AppError {
     // Miscellaneous
     Unknown(String),
 }
+// │   │   required for `Result<Vec<Mod>, AppError>` to implement `FromResidual<Result<Infallible, ParseBoolError>>` rustc (E0277) [125, 68]
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -192,6 +198,14 @@ impl From<serde_json::Error> for AppError {
 impl<T> From<std::sync::PoisonError<T>> for AppError {
     fn from(err: std::sync::PoisonError<T>) -> Self {
         AppError::LockPoisoned(format!("Mutex poison error: {}", err))
+    }
+}
+
+//             let entry = entry.map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+impl From<git2::Error> for AppError {
+    fn from(err: git2::Error) -> Self {
+        AppError::GitOperation(err.to_string())
     }
 }
 

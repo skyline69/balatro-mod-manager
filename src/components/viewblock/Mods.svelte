@@ -2,7 +2,7 @@
 	import {
 		Download,
 		Flame,
-		Clock,
+		// Clock,
 		Star,
 		Spade,
 		Gamepad2,
@@ -36,7 +36,7 @@
 	} from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
-	import { invoke } from "@tauri-apps/api/core";
+	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
@@ -91,20 +91,25 @@
 
 	onMount(() => {
 		const initialize = async () => {
-			if ($modsStore.length === 0) {
+			const cached = await getFromCache();
+			if (
+				cached &&
+				Date.now() - cached.timestamp * 1000 < CACHE_DURATION
+			) {
+				modsStore.set(cached.mods);
+			} else {
 				try {
 					isLoading = true;
-					mods = await fetchModDirectories();
-					// Handle installation status updates
+					const freshMods = await fetchModDirectories();
+					modsStore.set(freshMods);
 				} finally {
 					isLoading = false;
 				}
 			}
+
 			try {
-				isLoading = true;
-				mods = await fetchModDirectories();
 				await Promise.all(
-					mods.map(async (mod) => {
+					$modsStore.map(async (mod) => {
 						const status = await isModInstalled(mod);
 						installationStatus.update((s) => ({
 							...s,
@@ -112,20 +117,12 @@
 						}));
 					}),
 				);
-
-				isLoading = false;
 			} catch (error) {
-				console.error("Failed to get modloader:", error);
-				isLoading = false;
+				console.error("Install status check failed:", error);
 			}
 		};
 
 		initialize();
-
-		// Return synchronous cleanup function
-		return () => {
-			// Cleanup code here if needed
-		};
 	});
 
 	const getAllInstalledMods = async () => {
@@ -188,69 +185,49 @@
 			console.error("Uninstall failed:", error);
 		}
 	};
+
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
 
-		// Collect dependencies first
-		const dependencies = [];
-		if (mod.requires_steamodded) dependencies.push("Steamodded");
-		if (mod.requires_talisman) dependencies.push("Talisman");
-
-		// Existing dependency check logic
-		if (mod.requires_steamodded || mod.requires_talisman) {
-			const steamoddedInstalled = mod.requires_steamodded
-				? await invoke<boolean>("check_mod_installation", {
-						modType: "Steamodded",
-					})
-				: true;
-			const talismanInstalled = mod.requires_talisman
-				? await invoke<boolean>("check_mod_installation", {
-						modType: "Talisman",
-					})
-				: true;
-
-			if (!steamoddedInstalled || !talismanInstalled) {
-				handleDependencyCheck({
-					steamodded: mod.requires_steamodded && !steamoddedInstalled,
-					talisman: mod.requires_talisman && !talismanInstalled,
-				});
-				return;
-			}
-		}
-
 		try {
+			// Check dependencies first
+			if (mod.requires_steamodded || mod.requires_talisman) {
+				const [steamoddedInstalled, talismanInstalled] =
+					await Promise.all([
+						mod.requires_steamodded
+							? invoke<boolean>("check_mod_installation", {
+									modType: "Steamodded",
+								})
+							: true,
+						mod.requires_talisman
+							? invoke<boolean>("check_mod_installation", {
+									modType: "Talisman",
+								})
+							: true,
+					]);
+
+				if (!steamoddedInstalled || !talismanInstalled) {
+					handleDependencyCheck({
+						steamodded:
+							mod.requires_steamodded && !steamoddedInstalled,
+						talisman: mod.requires_talisman && !talismanInstalled,
+					});
+					return; // Stop installation until dependencies are resolved
+				}
+			}
+
+			// Proceed with installation
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
-			let installedPath = await invoke<string>("install_mod", {
+			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
-			// if (mod.title.toLowerCase() == "talisman") {
-			// 	installedPath = installedPath += "Talisman";
-			// }
-			//
-			const pathExists = await invoke("verify_path_exists", {
-				path: installedPath,
-			});
-			if (!pathExists) {
-				throw new Error(
-					"Installation failed - files not found at destination",
-				);
-			}
-
-			// Determine dependencies based on mod type
-			let modDependencies = dependencies;
-			if (mod.title.toLowerCase() === "steamodded") {
-				modDependencies = [];
-			} else if (mod.title.toLowerCase() === "talisman") {
-				modDependencies = [];
-			}
 
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				dependencies: dependencies,
+				dependencies: [],
 			});
 
-			await getAllInstalledMods();
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 		} catch (error) {
 			console.error("Failed to install mod:", error);
@@ -276,7 +253,7 @@
 		downloadURL?: string;
 	}
 
-	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+	const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
 
 	async function saveToCache(mods: Mod[]) {
@@ -319,135 +296,116 @@
 			return "images/cover.jpg";
 		}
 	}
+	//
+	// async function getLastUpdated(repoUrl: string): Promise<string> {
+	// 	try {
+	// 		const [owner, repo] = repoUrl
+	// 			.replace("https://github.com/", "")
+	// 			.split("/");
+	//
+	// 		if (!owner || !repo) {
+	// 			return "Unknown";
+	// 		}
+	//
+	// 		const response = await fetch(
+	// 			`https://api.github.com/repos/${owner}/${repo}/commits/main`,
+	// 		);
+	//
+	// 		if (!response.ok) {
+	// 			return "Unknown";
+	// 		}
+	//
+	// 		const data = await response.json();
+	// 		if (!data?.commit?.committer?.date) {
+	// 			return "Unknown";
+	// 		}
+	//
+	// 		const commitDate = new Date(data.commit.committer.date);
+	// 		const currentDate = new Date();
+	// 		const diffTime = Math.abs(
+	// 			currentDate.getTime() - commitDate.getTime(),
+	// 		);
+	// 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+	//
+	// 		if (diffDays === 0) return "Today";
+	// 		if (diffDays === 1) return "Yesterday";
+	// 		if (diffDays < 7) return `${diffDays} days ago`;
+	// 		if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+	// 		if (diffDays < 365)
+	// 			return `${Math.floor(diffDays / 30)} months ago`;
+	// 		return `${Math.floor(diffDays / 365)} years ago`;
+	// 	} catch (error) {
+	// 		console.error("Failed to fetch last commit date:", error);
+	// 		return "Unknown";
+	// 	}
+	// }
 
-	async function getLastUpdated(repoUrl: string): Promise<string> {
-		try {
-			const [owner, repo] = repoUrl
-				.replace("https://github.com/", "")
-				.split("/");
-
-			if (!owner || !repo) {
-				return "Unknown";
-			}
-
-			const response = await fetch(
-				`https://api.github.com/repos/${owner}/${repo}/commits/main`,
-			);
-
-			if (!response.ok) {
-				return "Unknown";
-			}
-
-			const data = await response.json();
-			if (!data?.commit?.committer?.date) {
-				return "Unknown";
-			}
-
-			const commitDate = new Date(data.commit.committer.date);
-			const currentDate = new Date();
-			const diffTime = Math.abs(
-				currentDate.getTime() - commitDate.getTime(),
-			);
-			const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-			if (diffDays === 0) return "Today";
-			if (diffDays === 1) return "Yesterday";
-			if (diffDays < 7) return `${diffDays} days ago`;
-			if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-			if (diffDays < 365)
-				return `${Math.floor(diffDays / 30)} months ago`;
-			return `${Math.floor(diffDays / 365)} years ago`;
-		} catch (error) {
-			console.error("Failed to fetch last commit date:", error);
-			return "Unknown";
-		}
-	}
-
-	async function fetchModDirectories() {
+	async function fetchModDirectories(): Promise<Mod[]> {
 		try {
 			isLoading = true;
+			const repoPath = await cloneOrUpdateRepo();
+			if (!repoPath) return [];
 
-			// Check cache with proper await
-			const cached = await getFromCache();
+			const modDirs = await invoke<string[]>("list_directories", {
+				path: `${repoPath}/mods`,
+			});
 
-			if (
-				cached &&
-				Date.now() - cached.timestamp * 1000 < CACHE_DURATION
-			) {
-				modsStore.set(cached.mods);
-				return cached.mods;
-			}
-
-			const response = await fetch(
-				"https://api.github.com/repos/skyline69/balatro-mod-index/contents/mods",
+			// Get all mod timestamps at once
+			const timestamps = await invoke<Record<string, number>>(
+				"get_mod_timestamps",
+				{
+					repoPath: repoPath, // Must match Rust parameter name exactly
+				},
 			);
-			if (!response.ok) {
-				throw new Error(`GitHub API returned ${response.status}`);
-			}
 
-			const directories = await response.json();
-
-			// Process mods with null filtering
 			const mods = (
 				await Promise.all(
-					directories.map(async (dir: any) => {
+					modDirs.map(async (dirName) => {
 						try {
-							const [metaResponse, descResponse] =
-								await Promise.all([
-									fetch(
-										`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/meta.json`,
-									),
-									fetch(
-										`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/description.md`,
-									),
-								]);
+							const [meta, description] = await Promise.all([
+								invoke<ModMeta>("read_json_file", {
+									path: `${repoPath}/mods/${dirName}/meta.json`,
+								}),
+								invoke<string>("read_text_file", {
+									path: `${repoPath}/mods/${dirName}/description.md`,
+								}),
+							]);
 
-							if (!metaResponse.ok || !descResponse.ok) {
-								throw new Error("Failed to fetch mod data");
-							}
-
-							const meta: ModMeta = await metaResponse.json();
-							const description = await descResponse.text();
-
-							// Handle last updated date
-							let lastUpdated = "Unknown";
-							try {
-								lastUpdated = await getLastUpdated(meta.repo);
-							} catch {
-								console.log(
-									`Failed to fetch last updated for ${meta.title}`,
-								);
-							}
-
-							// Check image existence
-							const imageUrl = await checkImageExists(
-								`https://raw.githubusercontent.com/skyline69/balatro-mod-index/main/mods/${dir.name}/thumbnail.jpg`,
+							const imagePath = `${repoPath}/mods/${dirName}/thumbnail.jpg`;
+							const imageExists = await invoke<boolean>(
+								"path_exists",
+								{
+									path: imagePath,
+								},
 							);
 
-							// Convert categories to enum values with validation
-
-							const categories = meta.categories
-								.map((cat) => categoryMap[cat])
-								.filter((c): c is Category => c !== undefined);
+							// Get timestamp for this mod directory
+							const lastUpdated =
+								timestamps[dirName] || Date.now();
 
 							return {
 								title: meta.title,
 								description,
-								image: imageUrl,
-								lastUpdated,
-								categories,
+								image: imageExists
+									? convertFileSrc(imagePath)
+									: "images/cover.jpg",
+								lastUpdated: lastUpdated.toString(),
 								colors: getRandomColorPair(),
-								installed: false,
+								categories: meta.categories
+									.map((cat) => categoryMap[cat])
+									.filter(Boolean),
 								requires_steamodded:
 									meta["requires-steamodded"],
 								requires_talisman: meta["requires-talisman"],
 								publisher: meta.author,
 								repo: meta.repo,
-								downloadURL: meta.downloadURL,
-							};
+								downloadURL: meta.downloadURL || "",
+								installed: false,
+							} as Mod;
 						} catch (error) {
 							console.error(
-								`Failed to process mod ${dir.name}:`,
+								`Failed to process mod ${dirName}:`,
+								addMessage("Failed to process mod", "error"),
 								error,
 							);
 							return null;
@@ -457,13 +415,38 @@
 			).filter((mod): mod is Mod => mod !== null);
 
 			await saveToCache(mods);
-			modsStore.set(mods);
 			return mods;
 		} catch (error) {
 			console.error("Failed to fetch mods:", error);
 			return [];
 		} finally {
 			isLoading = false;
+		}
+	}
+	async function cloneOrUpdateRepo() {
+		try {
+			const repoPath = await invoke<string>("get_repo_path");
+			const exists = await invoke<boolean>("path_exists", {
+				path: repoPath,
+			});
+
+			if (!exists) {
+				await invoke("clone_repo", {
+					url: "https://github.com/skyline69/balatro-mod-index.git",
+					path: repoPath,
+				});
+			} else {
+				const lastFetched = await invoke<number>("get_last_fetched");
+				if (Date.now() - lastFetched > 3600 * 1000) {
+					// 1 hour
+					await invoke("pull_repo", { path: repoPath });
+					await invoke("update_last_fetched");
+				}
+			}
+			return repoPath;
+		} catch (error) {
+			console.error("Repo management failed:", error);
+			return null;
 		}
 	}
 	const categories = [
@@ -562,10 +545,10 @@
 					return a.title.localeCompare(b.title);
 				case SortOption.NameDesc:
 					return b.title.localeCompare(a.title);
-				case SortOption.LastUpdatedAsc:
-					return a.lastUpdated.localeCompare(b.lastUpdated);
-				case SortOption.LastUpdatedDesc:
-					return b.lastUpdated.localeCompare(a.lastUpdated);
+				// case SortOption.LastUpdatedAsc:
+				// 	return a.lastUpdated.localeCompare(b.lastUpdated);
+				// case SortOption.LastUpdatedDesc:
+				// 	return b.lastUpdated.localeCompare(a.lastUpdated);
 				default:
 					return 0;
 			}
@@ -626,6 +609,31 @@
 		currentPage.set(page);
 		updatePaginationWindow();
 	}
+
+	// For CSS later
+	// .tags {
+	// 	position: absolute;
+	// 	top: 7.2rem; /* Adjusted top position */
+	// 	right: 0.35rem; /* Adjusted right position */
+	// 	display: flex;
+	// 	gap: 0.5rem;
+	// }
+	// .tag :global(svg) {
+	// 	position: relative;
+	// 	top: -1px; /* Adds subtle upward adjustment to the icons */
+	// }
+	//
+	// .tag {
+	// 	display: flex;
+	// 	align-items: center;
+	// 	position: relative;
+	// 	gap: 0.2rem;
+	// 	padding: 0.15rem 0.3rem;
+	// 	background: rgba(0, 0, 0, 0.7);
+	// 	border-radius: 4px;
+	// 	font-size: 0.9rem;
+	// 	color: #f4eee0;
+	// }
 </script>
 
 <div class="mods-container">
@@ -633,7 +641,7 @@
 		{#each categories as category}
 			<button
 				class:active={$currentCategory === category.name}
-				on:click={() => handleCategoryClick(category.name)}
+				onclick={() => handleCategoryClick(category.name)}
 			>
 				<svelte:component this={category.icon} size={16} />
 				{category.name}
@@ -657,7 +665,7 @@
 					in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
 				>
 					<button
-						on:click={previousPage}
+						onclick={previousPage}
 						disabled={$currentPage === 1}
 					>
 						Previous
@@ -667,14 +675,14 @@
 						{#if startPage + i <= totalPages}
 							<button
 								class:active={$currentPage === startPage + i}
-								on:click={() => goToPage(startPage + i)}
+								onclick={() => goToPage(startPage + i)}
 							>
 								{startPage + i}
 							</button>
 						{/if}
 					{/each}
 					<button
-						on:click={nextPage}
+						onclick={nextPage}
 						disabled={$currentPage === totalPages}
 					>
 						Next
@@ -685,7 +693,7 @@
 						<ArrowUpDown size={16} />
 						<select
 							value={$currentSort}
-							on:change={handleSortChange}
+							onchange={handleSortChange}
 						>
 							<option value={SortOption.NameAsc}
 								>Name (A-Z)</option
@@ -693,12 +701,12 @@
 							<option value={SortOption.NameDesc}
 								>Name (Z-A)</option
 							>
-							<option value={SortOption.LastUpdatedDesc}
-								>Latest Updated</option
-							>
-							<option value={SortOption.LastUpdatedAsc}
-								>Oldest Updated</option
-							>
+							<!-- <option value={SortOption.LastUpdatedDesc} -->
+							<!-- 	>Latest Updated</option -->
+							<!-- > -->
+							<!-- <option value={SortOption.LastUpdatedAsc} -->
+							<!-- 	>Oldest Updated</option -->
+							<!-- > -->
 						</select>
 					</div>
 				</div>
@@ -709,8 +717,8 @@
 						class="mod-card"
 						style="--orig-color1: {mod.colors
 							.color1}; --orig-color2: {mod.colors.color2};"
-						on:click={() => handleModClick(mod)}
-						on:keydown={(e) =>
+						onclick={() => handleModClick(mod)}
+						onkeydown={(e) =>
 							e.key === "Enter" && handleModClick(mod)}
 						role="button"
 						tabindex="0"
@@ -720,13 +728,20 @@
 								src={mod.image}
 								alt={mod.title}
 								draggable="false"
+								onerror={(e) => {
+									(e.currentTarget as HTMLImageElement).src =
+										"images/cover.jpg";
+									(
+										e.currentTarget as HTMLImageElement
+									).onerror = null;
+								}}
 							/>
-							<div class="tags">
-								<span class="tag updated">
-									<Clock size={13} />
-									{mod.lastUpdated}
-								</span>
-							</div>
+							<!-- <div class="tags"> -->
+							<!-- 	<span class="tag updated"> -->
+							<!-- 		<Clock size={13} /> -->
+							<!-- 		{mod.lastUpdated} -->
+							<!-- 	</span> -->
+							<!-- </div> -->
 						</div>
 						<div class="mod-info">
 							<h3>{mod.title}</h3>
@@ -740,7 +755,10 @@
 								class:installed={$installationStatus[mod.title]}
 								disabled={$installationStatus[mod.title] ||
 									$loadingStates[mod.title]}
-								on:click|stopPropagation={() => installMod(mod)}
+								onclick={(e) => {
+									e.stopPropagation();
+									installMod(mod);
+								}}
 							>
 								{#if $loadingStates[mod.title]}
 									<div class="spinner"></div>
@@ -755,8 +773,10 @@
 							{#if $installationStatus[mod.title]}
 								<button
 									class="delete-button"
-									on:click|stopPropagation={() =>
-										uninstallMod(mod)}
+									onclick={(e) => {
+										e.stopPropagation();
+										uninstallMod(mod);
+									}}
 								>
 									<Trash2 size={16} />
 								</button>
@@ -769,7 +789,9 @@
 	{/if}
 </div>
 
-<ModView mod={$currentModView!} on:checkDependencies={onDependencyCheck} />
+{#if $currentModView}
+	<ModView mod={$currentModView!} />
+{/if}
 
 <style>
 	.mods-container {
@@ -1058,32 +1080,11 @@
 		height: 100%;
 		border-radius: 5px;
 		object-fit: cover;
+		font-family: "object-fit: cover;"; /* IE fallback */
+		background: #2a2a2a; /* Fallback background */
 		border: 2px solid #f4eee0;
 	}
 
-	.tags {
-		position: absolute;
-		top: 7.2rem; /* Adjusted top position */
-		right: 0.35rem; /* Adjusted right position */
-		display: flex;
-		gap: 0.5rem;
-	}
-	.tag :global(svg) {
-		position: relative;
-		top: -1px; /* Adds subtle upward adjustment to the icons */
-	}
-
-	.tag {
-		display: flex;
-		align-items: center;
-		position: relative;
-		gap: 0.2rem;
-		padding: 0.15rem 0.3rem;
-		background: rgba(0, 0, 0, 0.7);
-		border-radius: 4px;
-		font-size: 0.9rem;
-		color: #f4eee0;
-	}
 	.download-button {
 		display: flex;
 		align-items: center;

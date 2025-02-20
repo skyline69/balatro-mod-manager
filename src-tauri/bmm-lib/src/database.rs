@@ -1,3 +1,4 @@
+use crate::cache::Mod;
 use crate::errors::AppError;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -72,6 +73,96 @@ impl Database {
         )
         .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
 
+        Ok(())
+    }
+
+    pub fn set_last_fetched(&self, timestamp: u64) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('last_fetched', ?1)",
+            [timestamp.to_string()],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_last_fetched(&self) -> Result<u64, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'last_fetched'")?;
+
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let val: String = row.get(0)?;
+            val.parse()
+                .map_err(|_| AppError::InvalidState("Invalid timestamp format".to_string()))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub fn get_cached_mods(&self) -> Result<Vec<Mod>, AppError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT title, description, image, last_updated, categories, colors, 
+            installed, requires_steamodded, requires_talisman, publisher, repo, download_url 
+            FROM mod_cache",
+        )?;
+
+        let mut rows = stmt.query([])?;
+        let mut mods = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let categories: String = row.get(4)?;
+            let colors: String = row.get(5)?;
+
+            mods.push(Mod {
+                title: row.get(0)?,
+                description: row.get(1)?,
+                image: row.get(2)?,
+                last_updated: row.get(3)?,
+                categories: serde_json::from_str(&categories)?,
+                colors: serde_json::from_str(&colors)?,
+                installed: row.get::<_, String>(6)?.parse().expect("Invalid boolean"),
+                requires_steamodded: row.get::<_, String>(7)?.parse().expect("Invalid boolean"),
+                requires_talisman: row.get::<_, String>(8)?.parse().expect("Invalid boolean"),
+                publisher: row.get(9)?,
+                repo: row.get(10)?,
+                download_url: row.get(11)?,
+            });
+        }
+
+        Ok(mods)
+    }
+
+    pub fn update_mod_cache(&mut self, mods: Vec<Mod>) -> Result<(), AppError> {
+        let tx = self.conn.transaction()?;
+
+        tx.execute("DELETE FROM mod_cache", [])?;
+
+        for m in mods {
+            let colors = serde_json::to_string(&m.colors)?;
+            tx.execute(
+                "INSERT INTO mod_cache (
+                    title, description, image, last_updated, categories, 
+                    colors, installed, requires_steamodded, requires_talisman,
+                    publisher, repo, download_url
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                [
+                    m.title,
+                    m.description,
+                    m.image,
+                    m.last_updated,
+                    serde_json::to_string(&m.categories)?,
+                    colors,
+                    m.installed.to_string(),
+                    m.requires_steamodded.to_string(),
+                    m.requires_talisman.to_string(),
+                    m.publisher,
+                    m.repo,
+                    m.download_url,
+                ],
+            )?;
+        }
+
+        tx.commit()?;
         Ok(())
     }
 

@@ -1,9 +1,18 @@
-use std::collections::HashSet;
-use std::panic;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use git2::{FetchOptions, RemoteCallbacks, Repository};
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
+
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs::File;
+use std::panic;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bmm_lib::balamod::find_balatros;
 use bmm_lib::cache;
@@ -15,20 +24,28 @@ use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::lovely;
 use bmm_lib::smods_installer::{ModInstaller, ModType};
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-
-use std::process::Command;
-
-use tauri::Manager;
 
 fn map_error<T>(result: Result<T, AppError>) -> Result<T, String> {
     result.map_err(|e| e.to_string())
 }
 
-// Create a state s;tructure to hold the database
+// Create a state structure to hold the database
 struct AppState {
     db: Mutex<Database>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModMeta {
+    #[serde(rename = "requires-steamodded")]
+    pub requires_steamodded: bool,
+    #[serde(rename = "requires-talisman")]
+    pub requires_talisman: bool,
+    pub categories: Vec<String>,
+    pub author: String,
+    pub repo: String,
+    pub title: String,
+    #[serde(rename = "downloadURL")]
+    pub download_url: Option<String>,
 }
 
 #[tauri::command]
@@ -44,6 +61,210 @@ async fn check_balatro_running() -> bool {
 #[tauri::command]
 async fn save_versions_cache(mod_type: String, versions: Vec<String>) -> Result<(), String> {
     map_error(cache::save_versions_cache(&mod_type, &versions))
+}
+
+#[tauri::command]
+async fn get_repo_path() -> Result<String, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
+    let repo_path = config_dir.join("Balatro").join("mod_index");
+    Ok(repo_path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn clone_repo(url: &str, path: &str) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    Repository::clone(url, &path).map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModCacheInfo {
+    pub path: String,
+    pub last_commit: i64,
+}
+
+#[tauri::command]
+async fn get_mod_timestamps(repoPath: String) -> Result<HashMap<String, i64>, String> {
+    let repo = Repository::open(&repoPath)
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let mut revwalk = repo
+        .revwalk()
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+    revwalk
+        .push_head()
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let mut timestamps = HashMap::new();
+    for oid in revwalk.filter_map(Result::ok) {
+        let commit = repo
+            .find_commit(oid)
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+        let tree = commit
+            .tree()
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+        for entry in tree.iter() {
+            // let entry = entry.map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+            let name = entry
+                .name()
+                .ok_or_else(|| AppError::GitOperation("Invalid filename".to_string()))?;
+
+            if name.starts_with("mods/") {
+                let mod_name = name.trim_start_matches("mods/").split('/').next().unwrap();
+                let entry_time = commit.time().seconds();
+
+                timestamps
+                    .entry(mod_name.to_string())
+                    .and_modify(|e| {
+                        if entry_time > *e {
+                            *e = entry_time
+                        }
+                    })
+                    .or_insert(entry_time);
+            }
+        }
+    }
+
+    Ok(timestamps)
+}
+
+#[tauri::command]
+async fn pull_repo(path: &str) -> Result<(), String> {
+    let repo =
+        Repository::open(path).map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let mut remote = repo
+        .find_remote("origin")
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, _username_from_url, _allowed_types| {
+        git2::Cred::userpass_plaintext("git", "")
+    });
+
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
+
+    remote
+        .fetch(&["main"], Some(&mut fetch_options), None)
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let fetch_commit = repo
+        .reference_to_annotated_commit(&fetch_head)
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    let analysis = repo
+        .merge_analysis(&[&fetch_commit])
+        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+    if analysis.0.is_up_to_date() {
+        Ok(())
+    } else if analysis.0.is_fast_forward() {
+        let mut reference = repo
+            .find_reference("refs/remotes/origin/main")
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+        reference
+            .set_target(fetch_commit.id(), "Fast-Forward")
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+        repo.set_head("refs/remotes/origin/main")
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
+
+        Ok(())
+    } else {
+        Err(AppError::GitOperation("Merge required".to_string()).to_string())
+    }
+}
+
+#[tauri::command]
+async fn list_directories(path: &str) -> Result<Vec<String>, String> {
+    let dir = PathBuf::from(path);
+    let entries = std::fs::read_dir(dir).map_err(|e| {
+        AppError::FileRead {
+            path: PathBuf::from(path),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+
+    let mut dirs = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| {
+            AppError::FileRead {
+                path: PathBuf::from(path),
+                source: e.to_string(),
+            }
+            .to_string()
+        })?;
+
+        if let Ok(file_type) = entry.file_type() {
+            if file_type.is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    dirs.push(name.to_string());
+                }
+            }
+        }
+    }
+    Ok(dirs)
+}
+
+#[tauri::command]
+async fn read_json_file(path: &str) -> Result<ModMeta, String> {
+    let path = PathBuf::from(path);
+    let file = File::open(&path).map_err(|e| {
+        AppError::FileRead {
+            path: path.clone(),
+            source: e.to_string(),
+        }
+        .to_string()
+    })?;
+
+    serde_json::from_reader(file).map_err(|e| {
+        AppError::JsonParse {
+            path,
+            source: e.to_string(),
+        }
+        .to_string()
+    })
+}
+
+#[tauri::command]
+async fn read_text_file(path: &str) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    std::fs::read_to_string(&path).map_err(|e| {
+        AppError::FileRead {
+            path,
+            source: e.to_string(),
+        }
+        .to_string()
+    })
+}
+
+#[tauri::command]
+async fn get_last_fetched(state: tauri::State<'_, AppState>) -> Result<u64, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_last_fetched().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_last_fetched(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.set_last_fetched(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -570,7 +791,10 @@ async fn get_background_state(state: tauri::State<'_, AppState>) -> Result<bool,
 }
 
 #[tauri::command]
-async fn set_background_state(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+async fn set_background_state(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     map_error(db.set_background_enabled(enabled))
 }
@@ -584,6 +808,12 @@ async fn verify_path_exists(path: String) -> bool {
             false
         }
     }
+}
+
+#[tauri::command]
+async fn path_exists(path: String) -> Result<bool, String> {
+    let path = PathBuf::from(path);
+    Ok(path.exists())
 }
 
 #[tauri::command]
@@ -683,6 +913,7 @@ pub fn run() {
             install_talisman_version,
             get_talisman_versions,
             verify_path_exists,
+            path_exists,
             check_mod_installation,
             refresh_mods_folder,
             save_mods_cache,
@@ -698,7 +929,16 @@ pub fn run() {
             get_dependents,
             reindex_mods,
             get_background_state,
-            set_background_state
+            set_background_state,
+            get_last_fetched,
+            update_last_fetched,
+            get_repo_path,
+            clone_repo,
+            pull_repo,
+            list_directories,
+            read_json_file,
+            read_text_file,
+            get_mod_timestamps,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {
