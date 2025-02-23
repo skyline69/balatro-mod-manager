@@ -40,14 +40,21 @@
 			handleClose();
 		}
 	}
-	async function openImagePopup() {
-		if (!isDefaultCover(mod.image)) {
-			await invoke("open_image_popup", {
-				imageUrl: mod.image,
-				title: mod.title,
-			});
-		}
-	}
+	// async function openImagePopup() {
+	// 	console.log("Opening popup with image:", {
+	// 		imageType: typeof mod.image,
+	// 		imageLength: mod.image.length,
+	// 		imagePreview: mod.image.substring(0, 100) + "...",
+	// 	});
+	//
+	// 	if (!isDefaultCover(mod.image)) {
+	// 		await invoke("open_image_popup", {
+	// 			imageUrl: mod.image,
+	// 			title: mod.title,
+	// 		});
+	// 	}
+	// }
+
 	let installedMods: InstalledMod[] = [];
 	let steamoddedVersions = $state<string[]>([]);
 	let talismanVersions = $state<string[]>([]);
@@ -378,13 +385,11 @@
 						{#if !isDefaultCover(mod.image)}
 							<button
 								class="image-button"
-								onclick={openImagePopup}
 								aria-label={`View full size image of ${mod.title}`}
 							>
 								<img
 									src={mod.image}
 									alt={mod.title}
-									class="clickable"
 									draggable="false"
 								/>
 							</button>
@@ -769,9 +774,11 @@
 	.image-container img {
 		cursor: default;
 	}
-	.image-container .clickable {
-		cursor: pointer;
-	}
+
+	/* .image-container .clickable { */
+	/* 	cursor: pointer; */
+	/* } */
+
 	@media (max-width: 1160px) {
 		.content-grid {
 			grid-template-columns: 1fr;

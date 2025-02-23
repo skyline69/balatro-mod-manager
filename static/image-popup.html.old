@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Image Viewer</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background: #393646;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			min-height: 100vh;
+			overflow: hidden;
+			user-select: none;
+			/* Prevent text selection */
+			-webkit-user-select: none;
+		}
+
+		img {
+			max-width: 95vw;
+			max-height: 95vh;
+			object-fit: contain;
+			border-radius: 8px;
+			-webkit-user-drag: none;
+			/* Prevent image dragging */
+		}
+	</style>
+</head>
+
+<body>
+	<img id="popup-image" />
+	<script>
+		// Prevent context menu
+		document.addEventListener('contextmenu', e => e.preventDefault());
+
+		// Get image URL from window parameters
+		const searchParams = new URLSearchParams(window.location.search);
+		const imageUrl = searchParams.get('image_data');
+		if (imageUrl) {
+			const decodedImage = decodeURIComponent(imageUrl);
+			document.getElementById('popup-image').src = decodedImage;
+	</script>
+</body>
+
+</html>

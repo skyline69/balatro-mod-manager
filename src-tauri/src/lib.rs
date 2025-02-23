@@ -2,8 +2,8 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{FetchOptions, RemoteCallbacks, Repository};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
-use tauri::WebviewUrl;
-use tauri::WebviewWindowBuilder;
+// use tauri::WebviewUrl;
+// use tauri::WebviewWindowBuilder;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -860,26 +860,6 @@ async fn check_custom_balatro(
     Ok(is_valid)
 }
 
-#[tauri::command]
-async fn open_image_popup(app: tauri::AppHandle, image_url: String, title: String) {
-    let _popup = match WebviewWindowBuilder::new(
-        &app,
-        "image_popup",
-        WebviewUrl::App(format!("image-popup.html?image={}", image_url).into()),
-    )
-    .title(title)
-    .inner_size(800.0, 600.0)
-    .center()
-    .build()
-    {
-        Ok(popup) => popup,
-        Err(e) => {
-            log::error!("Failed to open image popup: {}", e);
-            return;
-        }
-    };
-}
-
 // #[tauri::command]
 // async fn get_installed_mods() -> Vec<String> {
 //     bmm_lib::finder::get_installed_mods()
@@ -931,7 +911,6 @@ pub fn run() {
             launch_balatro,
             check_steam_running,
             check_balatro_running,
-            open_image_popup,
             get_installed_mods_from_db,
             install_mod,
             add_installed_mod,
