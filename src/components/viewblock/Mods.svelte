@@ -36,7 +36,7 @@
 	} from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
-	import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+	import { invoke } from "@tauri-apps/api/core";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
@@ -278,24 +278,6 @@
 		}
 	}
 
-	async function checkImageExists(imageUrl: string): Promise<string> {
-		try {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-			const response = await fetch(imageUrl, {
-				method: "HEAD",
-				signal: controller.signal,
-				// Suppress console errors
-				credentials: "omit",
-			});
-
-			clearTimeout(timeoutId);
-			return response.ok ? imageUrl : "images/cover.jpg";
-		} catch {
-			return "images/cover.jpg";
-		}
-	}
 	//
 	// async function getLastUpdated(repoUrl: string): Promise<string> {
 	// 	try {
@@ -350,11 +332,10 @@
 				path: `${repoPath}/mods`,
 			});
 
-			// Get all mod timestamps at once
 			const timestamps = await invoke<Record<string, number>>(
 				"get_mod_timestamps",
 				{
-					repoPath: repoPath, // Must match Rust parameter name exactly
+					repoPath: repoPath,
 				},
 			);
 
@@ -371,24 +352,20 @@
 								}),
 							]);
 
-							const imagePath = `${repoPath}/mods/${dirName}/thumbnail.jpg`;
-							const imageExists = await invoke<boolean>(
-								"path_exists",
+							const imageData: string | undefined = await invoke<string>(
+								"get_mod_thumbnail",
 								{
-									path: imagePath,
+									modPath: dirName,
 								},
 							);
 
-							// Get timestamp for this mod directory
 							const lastUpdated =
 								timestamps[dirName] || Date.now();
 
 							return {
 								title: meta.title,
 								description,
-								image: imageExists
-									? convertFileSrc(imagePath)
-									: "images/cover.jpg",
+								image: imageData || "images/cover.jpg",
 								lastUpdated: lastUpdated.toString(),
 								colors: getRandomColorPair(),
 								categories: meta.categories
@@ -405,7 +382,6 @@
 						} catch (error) {
 							console.error(
 								`Failed to process mod ${dirName}:`,
-								addMessage("Failed to process mod", "error"),
 								error,
 							);
 							return null;
@@ -423,6 +399,7 @@
 			isLoading = false;
 		}
 	}
+
 	async function cloneOrUpdateRepo() {
 		try {
 			const repoPath = await invoke<string>("get_repo_path");
@@ -728,12 +705,11 @@
 								src={mod.image}
 								alt={mod.title}
 								draggable="false"
-								onerror={(e) => {
-									(e.currentTarget as HTMLImageElement).src =
-										"images/cover.jpg";
-									(
-										e.currentTarget as HTMLImageElement
-									).onerror = null;
+								onerror={async (e) => {
+									const img =
+										e.currentTarget as HTMLImageElement;
+									img.src = "images/cover.jpg";
+									img.onerror = null;
 								}}
 							/>
 							<!-- <div class="tags"> -->

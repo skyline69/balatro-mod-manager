@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{FetchOptions, RemoteCallbacks, Repository};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -84,6 +85,33 @@ pub struct ModCacheInfo {
     pub last_commit: i64,
 }
 
+#[allow(non_snake_case)]
+#[tauri::command]
+async fn get_mod_thumbnail(modPath: String) -> Result<Option<String>, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
+
+    let full_path = config_dir
+        .join("Balatro")
+        .join("mod_index")
+        .join("mods")
+        .join(modPath)
+        .join("thumbnail.jpg");
+
+    // Read the image file
+    let image_data = match std::fs::read(&full_path) {
+        Ok(data) => data,
+        Err(_) => {
+            return Ok(None);
+        }
+    };
+
+    // Convert to base64
+    let base64 = STANDARD.encode(image_data);
+    Ok(Some(format!("data:image/jpeg;base64,{}", base64)))
+}
+
+#[allow(non_snake_case)]
 #[tauri::command]
 async fn get_mod_timestamps(repoPath: String) -> Result<HashMap<String, i64>, String> {
     let repo = Repository::open(&repoPath)
@@ -939,6 +967,7 @@ pub fn run() {
             read_json_file,
             read_text_file,
             get_mod_timestamps,
+            get_mod_thumbnail,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

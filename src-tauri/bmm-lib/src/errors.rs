@@ -33,6 +33,7 @@ pub enum AppError {
         source: String,
     },
     DirNotFound(PathBuf),
+    PathConversionError,
 
     // System errors
     SystemTime(String),
@@ -134,6 +135,12 @@ impl fmt::Display for AppError {
             // Handle all variants similarly
             _ => write!(f, "{:?}", self),
         }
+    }
+}
+
+impl From<std::convert::Infallible> for AppError {
+    fn from(_: std::convert::Infallible) -> Self {
+        AppError::Unknown("Infallible error occurred".to_string())
     }
 }
 

@@ -60,10 +60,20 @@
       "startDragging": true
     },
 	"allowlist": {
-    "menu": {
-      "all": true
-    }
-  }
+		"menu": {
+		  "all": true
+		},
+		"path": {
+			"all": true
+		},
+		"fs": {
+			"scope": [
+				"$RESOURCE/**",
+				"$CONFIG/Balatro/mod_index/**",
+				"$ASSET/**"
+			]
+		}
+	}
   }
 }
 

@@ -269,6 +269,7 @@ name = "balatro-mod-manager"
 version = "0.1.4"
 dependencies = [
  "assert_fs",
+ "base64 0.22.1",
  "bmm-lib",
  "dirs 6.0.0",
  "fix-path-env",
@@ -285,6 +286,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-shell",
+ "tauri-utils",
  "tempfile",
  "test-case",
  "tokio-test",
