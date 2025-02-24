@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { fade, scale } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
+	// import { uninstallDialogStore } from "../stores/modStore";
 	import type { UninstallResult } from "../stores/modStore";
-	import { dependentsStore } from "../stores/modStore";
 
 	let {
 		show = $bindable(false),
@@ -20,18 +20,6 @@
 		onError?: (error: unknown) => void;
 	}>();
 
-	// FIXME: When trying to uninstall steamodded or talisman, the dialog should show up, but it doesn't.
-
-	// Sync dependents with store
-	$effect(() => {
-		dependentsStore.set(dependents);
-	});
-
-	const isCoreMod = $derived(
-		modName?.toLowerCase() === "steamodded" ||
-			modName?.toLowerCase() === "talisman",
-	);
-
 	let action: "cancel" | "force" | "cascade" | null = null;
 
 	async function handleUninstall() {
@@ -39,35 +27,41 @@
 			let success = false;
 			let resultAction: UninstallResult["action"] = "single";
 
+			const currentModName = modName;
+			const currentModPath = modPath;
+
 			if (action === "cascade") {
-				await invoke("cascade_uninstall", { rootMod: modName });
+				await invoke("cascade_uninstall", {
+					rootMod: currentModName.toUpperCase(),
+				});
 				success = true;
 				resultAction = "cascade";
 			} else if (action === "force") {
 				await invoke("force_remove_mod", {
-					name: modName,
-					path: modPath,
+					name: currentModName,
+					path: currentModPath,
 				});
 				success = true;
 				resultAction = "force";
 			} else if (action === null) {
+				// Add this case
 				await invoke("remove_installed_mod", {
-					name: modName,
-					path: modPath,
+					name: currentModName,
+					path: currentModPath,
 				});
 				success = true;
+				resultAction = "single";
 			}
 
-			if (success && onUninstalled) {
-				onUninstalled({
+			if (success) {
+				show = false;
+				onUninstalled?.({
 					success: true,
 					action: resultAction,
 				});
 			}
 		} catch (e) {
 			onError?.(e);
-		} finally {
-			show = false;
 		}
 	}
 
@@ -76,12 +70,12 @@
 	}
 </script>
 
-{#if show && isCoreMod}
+{#if show}
 	<div class="dialog-overlay" transition:fade={{ duration: 100 }}>
 		<div class="dialog-content" transition:scale={{ duration: 200 }}>
 			<h2>Uninstall {modName}?</h2>
 
-			{#if dependents.length > 0}
+			{#if dependents && dependents.length > 0}
 				<div class="dependency-list">
 					<h3>{modName} is required for:</h3>
 					<div class="scroll-container">

@@ -36,6 +36,14 @@ export interface UninstallDialogState {
 	dependents: string[];
 }
 
+
+export const uninstallDialogStore = writable<UninstallDialogState>({
+	show: false,
+	modName: "",
+	modPath: "",
+	dependents: []
+});
+
 export const selectedModStore = writable<{ name: string; path: string } | null>(null);
 export const dependentsStore = writable<string[]>([]);
 export const currentPage = writable(1);

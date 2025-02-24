@@ -33,7 +33,7 @@
 		modsStore,
 		installationStatus,
 		loadingStates2 as loadingStates,
-	} from "../../stores/modStore";
+	} from "../../stores/modStore"
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -166,7 +166,7 @@
 				await tick();
 
 				// Use store object directly
-				uninstallDialogStore.update((s) => ({
+				uninstallDialogStore.update((s: Record<string, any>) => ({
 					...s,
 					show: true,
 					modName: mod.title,
