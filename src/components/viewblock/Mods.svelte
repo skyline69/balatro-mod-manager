@@ -60,7 +60,7 @@
 		};
 	});
 
-	let mods: Mod[] = [];
+	// let mods: Mod[] = [];
 	let isLoading = true;
 
 	interface DependencyCheck {
@@ -69,11 +69,11 @@
 	}
 
 	export let handleDependencyCheck: (requirements: DependencyCheck) => void;
-	function onDependencyCheck(
-		event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
-	) {
-		handleDependencyCheck(event.detail);
-	}
+	// function onDependencyCheck(
+	// 	event: CustomEvent<{ steamodded: boolean; talisman: boolean }>,
+	// ) {
+	// 	handleDependencyCheck(event.detail);
+	// }
 
 	export let mod: Mod | null;
 
@@ -152,27 +152,28 @@
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
-				(m) => m.name === mod.title,
+				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
+
 			if (!installedMod) return;
 
 			if (isCoreMod) {
-				// Get fresh dependencies list
+				// Force uppercase for core mod names
 				const dependents = await invoke<string[]>("get_dependents", {
-					modName: mod.title,
+					modName: mod.title.toUpperCase(), // Match Rust enum naming
 				});
 
-				// Force UI update before showing dialog
 				await tick();
 
-				uninstallDialogStore.set({
+				// Use store object directly
+				uninstallDialogStore.update((s) => ({
+					...s,
 					show: true,
 					modName: mod.title,
 					modPath: installedMod.path,
 					dependents,
-				});
+				}));
 			} else {
-				// Immediate uninstall for normal mods
 				await invoke("remove_installed_mod", {
 					name: mod.title,
 					path: installedMod.path,
@@ -184,9 +185,9 @@
 			}
 		} catch (error) {
 			console.error("Uninstall failed:", error);
+			addMessage(`Uninstall failed: ${error}`, "error");
 		}
 	};
-
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
 
@@ -353,12 +354,10 @@
 								}),
 							]);
 
-							const imageData: string | undefined = await invoke<string>(
-								"get_mod_thumbnail",
-								{
+							const imageData: string | undefined =
+								await invoke<string>("get_mod_thumbnail", {
 									modPath: dirName,
-								},
-							);
+								});
 
 							const lastUpdated =
 								timestamps[dirName] || Date.now();

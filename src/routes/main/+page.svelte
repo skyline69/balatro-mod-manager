@@ -9,6 +9,7 @@
 	import type { DependencyCheck, InstalledMod } from "../../stores/modStore";
 	import { currentModView } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
+	import { selectedModStore, dependentsStore } from "../../stores/modStore";
 	import {
 		installationStatus,
 		showWarningPopup,
@@ -18,26 +19,27 @@
 	import UninstallDialog from "../../components/UninstallDialog.svelte";
 	import { onMount } from "svelte";
 
-	let currentSection = "mods";
+	let currentSection = $state("mods");
 	// window.addEventListener("resize", () => {
 	//     console.log(
 	//         `Window size: ${window.innerWidth} x ${window.innerHeight}`,
 	//     );
 	// });
 
-	$: if (currentSection !== "mods") {
-		// Store will retain the value but component won't show
-		// Will reappear when returning to mods section
-	}
+	$effect(() => {
+		// Cleanup
+		return () => {
+			// Cleanup
+		};
+	});
 
 	// Add these for the RequiresPopup
-	let showRequiresPopup = false;
+	let showRequiresPopup = $state(false);
 
 	let contentElement: HTMLDivElement;
 
-	let showUninstallDialog = false;
-	let selectedMod = { name: "", path: "" };
-	let dependents: string[] = [];
+	let showUninstallDialog = $state(false);
+	const selectedMod = $derived($selectedModStore);
 
 	async function handleRefresh() {
 		const installedMods: InstalledMod[] = await invoke(
@@ -50,25 +52,36 @@
 		);
 	}
 
-	function showError(error: string) {
-		addMessage(`Uninstall failed: ${error}`, "error");
+	function showError(error: unknown) {
+		addMessage(
+			`Uninstall failed: ${error instanceof Error ? error.message : String(error)}`,
+			"error",
+		);
 	}
 
-	let modRequirements = {
+	let modRequirements = $state({
 		steamodded: false,
 		talisman: false,
-	};
+	});
 
 	function handleDependencyCheck(requirements: DependencyCheck) {
 		modRequirements = requirements;
 		showRequiresPopup = true;
 	}
 
+	function handleRequestUninstall(
+		event: CustomEvent<{ mod: InstalledMod; dependents: string[] }>,
+	) {
+		selectedModStore.set(event.detail.mod);
+		dependentsStore.set(event.detail.dependents);
+		showUninstallDialog = true;
+	}
+
 	onMount(() => {
 		handleRefresh();
 	});
 
-	$: {
+	$effect(() => {
 		if ($currentModView) {
 			// Scroll both window and content container to top
 			window.scrollTo({ top: 0, behavior: "instant" });
@@ -83,7 +96,7 @@
 			document.body.style.overflow = "auto";
 			document.documentElement.style.overflow = "auto";
 		}
-	}
+	});
 </script>
 
 {#if $backgroundEnabled}
@@ -99,19 +112,19 @@
 		<nav>
 			<button
 				class:active={currentSection === "mods"}
-				on:click={() => (currentSection = "mods")}
+				onclick={() => (currentSection = "mods")}
 			>
 				Mods
 			</button>
 			<button
 				class:active={currentSection === "settings"}
-				on:click={() => (currentSection = "settings")}
+				onclick={() => (currentSection = "settings")}
 			>
 				Settings
 			</button>
 			<button
 				class:active={currentSection === "about"}
-				on:click={() => (currentSection = "about")}
+				onclick={() => (currentSection = "about")}
 			>
 				About
 			</button>
@@ -127,11 +140,7 @@
 			<Mods
 				mod={null}
 				{handleDependencyCheck}
-				on:request_uninstall={(e) => {
-					selectedMod = e.detail.mod;
-					dependents = e.detail.dependents;
-					showUninstallDialog = true;
-				}}
+				on:request_uninstall={handleRequestUninstall}
 			/>
 		{/if}
 
@@ -155,13 +164,14 @@
 		onConfirm={$showWarningPopup.onConfirm}
 		onCancel={$showWarningPopup.onCancel}
 	/>
+
 	<UninstallDialog
 		bind:show={showUninstallDialog}
-		modName={selectedMod.name}
-		modPath={selectedMod.path}
-		{dependents}
-		on:uninstalled={handleRefresh}
-		on:error={({ detail }) => showError(detail)}
+		modName={selectedMod?.name ?? ""}
+		modPath={selectedMod?.path ?? ""}
+		bind:dependents={$dependentsStore}
+		onUninstalled={handleRefresh}
+		onError={showError}
 	/>
 
 	<div class="version-text">v0.1.4</div>
