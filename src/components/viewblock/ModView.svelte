@@ -369,151 +369,138 @@
 	}}
 />
 
-{#if $currentModView}
-	<div
-		class="mod-view"
-		transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
-	>
-		<button class="back-button" onclick={handleClose}>
-			<ArrowLeft size={20} /> <span>Back</span>
-		</button>
-		<div class="mod-content">
-			<h2>{mod.title}</h2>
-			<div class="content-grid">
-				<div class="left-column">
-					<div class="image-container">
-						{#if !isDefaultCover(mod.image)}
-							<button
-								class="image-button"
-								aria-label={`View full size image of ${mod.title}`}
-							>
-								<img
-									src={mod.image}
-									alt={mod.title}
-									draggable="false"
-								/>
-							</button>
-						{:else}
+<div
+	class="mod-view"
+	transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
+>
+	<button class="back-button" onclick={handleClose}>
+		<ArrowLeft size={20} /> <span>Back</span>
+	</button>
+	<div class="mod-content">
+		<h2>{mod.title}</h2>
+		<div class="content-grid">
+			<div class="left-column">
+				<div class="image-container">
+					{#if !isDefaultCover(mod.image)}
+						<button
+							class="image-button"
+							aria-label={`View full size image of ${mod.title}`}
+						>
 							<img
 								src={mod.image}
 								alt={mod.title}
 								draggable="false"
 							/>
-						{/if}
-					</div>
-					<div class="button-container">
-						<button
-							class="download-button"
-							class:installed={$installationStatus[mod.title]}
-							disabled={$installationStatus[mod.title] ||
-								$loadingStates[mod.title]}
-							onclick={() => installMod(mod)}
-						>
-							{#if $loadingStates[mod.title]}
-								<div class="spinner"></div>
-							{:else}
-								<Download size={18} />
-								{$installationStatus[mod.title]
-									? "Installed"
-									: "Download"}
-							{/if}
 						</button>
-						{#if $installationStatus[mod.title]}
-							<button
-								class="delete-button"
-								title="Remove Mod"
-								onclick={() => uninstallMod(mod)}
-							>
-								<Trash2 size={18} />
-							</button>
+					{:else}
+						<img
+							src={mod.image}
+							alt={mod.title}
+							draggable="false"
+						/>
+					{/if}
+				</div>
+				<div class="button-container">
+					<button
+						class="download-button"
+						class:installed={$installationStatus[mod.title]}
+						disabled={$installationStatus[mod.title] ||
+							$loadingStates[mod.title]}
+						onclick={() => installMod(mod)}
+					>
+						{#if $loadingStates[mod.title]}
+							<div class="spinner"></div>
+						{:else}
+							<Download size={18} />
+							{$installationStatus[mod.title]
+								? "Installed"
+								: "Download"}
 						{/if}
-					</div>
-					{#if mod.title.toLowerCase() === "talisman" && !$installationStatus[mod.title]}
-						<div class="version-selector">
-							{#if loadingVersions}
-								<div class="loading-text">
-									Loading versions...
-								</div>
-							{:else if talismanVersions.length === 0}
-								<div class="loading-text">
-									No versions available
-								</div>
-							{:else}
-								<select
-									bind:value={selectedVersion}
-									disabled={$loadingStates[mod.title]}
-								>
-									<option value="newest" selected
-										>latest (could be unstable)</option
-									>
-									{#each talismanVersions as version}
-										<option value={version}
-											>{version}</option
-										>
-									{/each}
-								</select>
-							{/if}
-						</div>
-					{/if}
-					{#if mod.title.toLowerCase() === "steamodded" && !$installationStatus[mod.title]}
-						<div class="version-selector">
-							{#if loadingVersions}
-								<div class="loading-text">
-									Loading versions...
-								</div>
-							{:else if steamoddedVersions.length === 0}
-								<div class="loading-text">
-									No versions available
-								</div>
-							{:else}
-								<select
-									bind:value={selectedVersion}
-									disabled={$loadingStates[mod.title]}
-								>
-									<option value="newest" selected
-										>latest (could be unstable)</option
-									>
-									{#each steamoddedVersions as version}
-										<option value={version}
-											>{version}</option
-										>
-									{/each}
-								</select>
-							{/if}
-						</div>
-					{/if}
-					<div class="mod-stats">
-						<span><Clock size={16} /> {mod.lastUpdated}</span>
-						<span><User size={16} /> {mod.publisher}</span>
-					</div>
-					{#if mod.repo}
+					</button>
+					{#if $installationStatus[mod.title]}
 						<button
-							onclick={() => open(mod.repo)}
-							class="repo-button"
+							class="delete-button"
+							title="Remove Mod"
+							onclick={() => uninstallMod(mod)}
 						>
-							<Github size={16} /> Repository
+							<Trash2 size={18} />
 						</button>
 					{/if}
 				</div>
-				<div class="right-column">
-					<div
-						class="description"
-						role="button"
-						tabindex="0"
-						onclick={handleMarkdownClick}
-						onkeydown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								handleMarkdownClick(e);
-							}
-						}}
-					>
-						{@html renderedDescription}
+				{#if mod.title.toLowerCase() === "talisman" && !$installationStatus[mod.title]}
+					<div class="version-selector">
+						{#if loadingVersions}
+							<div class="loading-text">Loading versions...</div>
+						{:else if talismanVersions.length === 0}
+							<div class="loading-text">
+								No versions available
+							</div>
+						{:else}
+							<select
+								bind:value={selectedVersion}
+								disabled={$loadingStates[mod.title]}
+							>
+								<option value="newest" selected
+									>latest (could be unstable)</option
+								>
+								{#each talismanVersions as version}
+									<option value={version}>{version}</option>
+								{/each}
+							</select>
+						{/if}
 					</div>
+				{/if}
+				{#if mod.title.toLowerCase() === "steamodded" && !$installationStatus[mod.title]}
+					<div class="version-selector">
+						{#if loadingVersions}
+							<div class="loading-text">Loading versions...</div>
+						{:else if steamoddedVersions.length === 0}
+							<div class="loading-text">
+								No versions available
+							</div>
+						{:else}
+							<select
+								bind:value={selectedVersion}
+								disabled={$loadingStates[mod.title]}
+							>
+								<option value="newest" selected
+									>latest (could be unstable)</option
+								>
+								{#each steamoddedVersions as version}
+									<option value={version}>{version}</option>
+								{/each}
+							</select>
+						{/if}
+					</div>
+				{/if}
+				<div class="mod-stats">
+					<span><Clock size={16} /> {mod.lastUpdated}</span>
+					<span><User size={16} /> {mod.publisher}</span>
+				</div>
+				{#if mod.repo}
+					<button onclick={() => open(mod.repo)} class="repo-button">
+						<Github size={16} /> Repository
+					</button>
+				{/if}
+			</div>
+			<div class="right-column">
+				<div
+					class="description"
+					role="button"
+					tabindex="0"
+					onclick={handleMarkdownClick}
+					onkeydown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							handleMarkdownClick(e);
+						}
+					}}
+				>
+					{@html renderedDescription}
 				</div>
 			</div>
 		</div>
 	</div>
-{/if}
+</div>
 
 <style>
 	.mod-view {
