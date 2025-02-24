@@ -97,6 +97,7 @@
 				Date.now() - cached.timestamp * 1000 < CACHE_DURATION
 			) {
 				modsStore.set(cached.mods);
+				isLoading = false;
 			} else {
 				try {
 					isLoading = true;
