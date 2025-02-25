@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 #[cfg(target_os = "windows")]
-use std::fs::File;
+use std::fs::{self, File};
 #[cfg(target_os = "macos")]
 use std::fs::{self, File};
 #[cfg(target_os = "macos")]
@@ -99,7 +99,12 @@ pub async fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
         if balatro_paths.is_empty() {
             return Err(AppError::DirNotFound(PathBuf::from("Balatro installation")));
         }
-        Ok(balatro_paths[0].join("Balatro.exe"))
+
+        // Ensure version.dll exists in the game directory
+        let game_path = &balatro_paths[0];
+        ensure_version_dll_exists(game_path).await?;
+
+        Ok(game_path.join("Balatro.exe"))
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -189,20 +194,11 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
 
     // Download the ZIP file
     let client = reqwest::Client::new();
-    let response = match client.get(url).send().await {
-        Ok(response) => response,
-        Err(e) => {
-            log::warn!(
-                "Failed to download lovely injector: {}, using embedded version",
-                e
-            );
-            std::fs::write(target_path, EMBEDDED_DLL).map_err(|e| AppError::FileWrite {
-                path: target_path.to_path_buf(),
-                source: e.to_string(),
-            })?;
-            return Ok(());
-        }
-    };
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| AppError::Network(format!("Failed to download lovely injector: {}", e)))?;
 
     // Save to temp zip file
     let temp_zip = temp_dir.path().join("lovely.zip");
@@ -211,20 +207,10 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
         source: e.to_string(),
     })?;
 
-    let bytes = match response.bytes().await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            log::warn!(
-                "Failed to read download response: {}, using embedded version",
-                e
-            );
-            std::fs::write(target_path, EMBEDDED_DLL).map_err(|e| AppError::FileWrite {
-                path: target_path.to_path_buf(),
-                source: e.to_string(),
-            })?;
-            return Ok(());
-        }
-    };
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| AppError::Network(format!("Failed to read download response: {}", e)))?;
 
     std::io::copy(&mut bytes.as_ref(), &mut file).map_err(|e| AppError::FileWrite {
         path: temp_zip.clone(),
@@ -273,11 +259,9 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
     }
 
     if !found_dll {
-        log::warn!("version.dll not found in downloaded zip, using embedded version");
-        std::fs::write(target_path, EMBEDDED_DLL).map_err(|e| AppError::FileWrite {
-            path: target_path.to_path_buf(),
-            source: e.to_string(),
-        })?;
+        return Err(AppError::InvalidState(
+            "version.dll not found in downloaded zip".to_string(),
+        ));
     }
 
     Ok(())

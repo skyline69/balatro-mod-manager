@@ -441,10 +441,12 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
     {
         // Paths for the executable
         let exe_path = path.join("Balatro.exe");
+        let dll_path = path.join("version.dll");
 
-        // Check if version.dll exists, if not download it
-        let dll_path = lovely::ensure_version_dll_exists(&path).await?;
-        log::debug!("Using version.dll at {}", dll_path.display());
+        // If version.dll doesn't exist, download it
+        if !dll_path.exists() {
+            lovely::ensure_version_dll_exists(&path).await?;
+        }
 
         // Launch the game
         if lovely_console_enabled {
@@ -462,6 +464,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
         log::debug!("Launched Balatro from {}", exe_path.display());
     }
+
     Ok(())
 }
 
