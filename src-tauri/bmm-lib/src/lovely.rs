@@ -1,17 +1,13 @@
 use crate::errors::AppError;
+#[cfg(target_os = "windows")]
+use std::fs::File;
 #[cfg(target_os = "macos")]
 use std::fs::{self, File};
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+#[cfg(target_os = "macos")]
 use std::path::Path;
-#[cfg(target_os = "windows")]
-use std::fs::File;
-#[cfg(target_os = "windows")]
-use std::io::Write;
-
-#[cfg(target_os = "windows")]
-pub const EMBEDDED_DLL: &[u8] = include_bytes!("../../resources/version.dll");
+use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 pub async fn ensure_version_dll_exists(game_path: &PathBuf) -> Result<PathBuf, AppError> {
