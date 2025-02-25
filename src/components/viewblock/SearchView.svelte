@@ -21,9 +21,16 @@
 	let mods = $state<Mod[]>([]);
 	let installedMods = $state<InstalledMod[]>([]);
 	let mod = $state<Mod | null>(null);
+	let searchInput: HTMLInputElement;
 
 	function handleModClick(mod: Mod) {
 		currentModView.set(mod);
+	}
+
+	function focusSearchInput() {
+		if (searchInput) {
+			searchInput.focus();
+		}
 	}
 
 	const { onCheckDependencies } = $props<{
@@ -99,7 +106,6 @@
 	const installMod = async (mod: Mod) => {
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
-
 			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
@@ -119,7 +125,6 @@
 				(mod.requires_steamodded && !steamoddedInstalled) ||
 				(mod.requires_talisman && !talismanInstalled)
 			) {
-
 				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
@@ -175,6 +180,12 @@
 			tokenize: "forward",
 			preset: "match",
 			cache: true,
+		});
+
+		$effect(() => {
+			if (searchInput) {
+				searchInput.focus();
+			}
 		});
 
 		// Subscribe to mods store
@@ -240,6 +251,7 @@
 	<div class="search-bar">
 		<form onsubmit={handleSearch}>
 			<input
+				bind:this={searchInput}
 				type="text"
 				bind:value={searchQuery}
 				oninput={handleInput}
