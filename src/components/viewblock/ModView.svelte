@@ -29,10 +29,6 @@
 			talisman: boolean;
 		}) => void;
 	}>();
-	let cachedVersionsValue: { steamodded: string[]; talisman: string[] };
-	cachedVersions.subscribe((value) => {
-		cachedVersionsValue = value;
-	});
 	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
 	function handleAuxClick(event: MouseEvent) {
 		if (event.button === 3) {
