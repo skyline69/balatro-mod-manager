@@ -27,14 +27,14 @@ bmm-lib = { path = "bmm-lib" }
 pretty_env_logger = "0.5.0"
 dirs = "6.0.0"
 tauri-plugin-fs = "2"
-log = "0.4.25"
+log = "0.4.26"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 git2 = "0.20.0"
 tauri-utils = "2.1.1"
 base64 = "0.22.1"
 
 [dev-dependencies]
-tempfile = "3.16.0"
+tempfile = "3.17.1"
 scopeguard = "1.2.0"
 mockito = "1.6.1"
 tokio-test = "0.4.4"
