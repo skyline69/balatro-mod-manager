@@ -1,72 +1,90 @@
 <script lang="ts">
 	import { fade, scale } from "svelte/transition";
 	import { invoke } from "@tauri-apps/api/core";
-	// import { uninstallDialogStore } from "../stores/modStore";
-	import type { UninstallResult } from "../stores/modStore";
+	import { uninstallDialogStore } from "../stores/modStore";
 
-	let {
-		show = $bindable(false),
-		modName = $bindable(""),
-		modPath = $bindable(""),
-		dependents = $bindable([] as string[]),
-		onUninstalled,
-		onError,
-	} = $props<{
-		show: boolean;
-		modName: string;
-		modPath: string;
-		dependents: string[];
-		onUninstalled?: (result: UninstallResult) => void;
-		onError?: (error: unknown) => void;
-	}>();
+	// Component props for callbacks
+	export let onUninstalled:
+		| ((event: {
+				detail: { modName: string; success: boolean; action: string };
+		  }) => void)
+		| undefined = undefined;
+
+	export let onError: ((event: { detail: unknown }) => void) | undefined =
+		undefined;
+
+	// Expose component state as props - but also subscribe to the store
+	export let show = false;
+	export let modName = "";
+	export let modPath = "";
+	export let dependents: string[] = [];
+
+	// Subscribe to the store changes
+	import { onMount } from "svelte";
+
+	onMount(() => {
+		const unsubscribe = uninstallDialogStore.subscribe((state) => {
+			console.log("Dialog store changed:", state);
+			// If the store says to show, update our local props
+			if (state.show) {
+				show = state.show;
+				modName = state.modName;
+				modPath = state.modPath;
+				dependents = state.dependents;
+				console.log("Dialog props updated from store");
+			}
+		});
+
+		return unsubscribe;
+	});
 
 	let action: "cancel" | "force" | "cascade" | null = null;
 
 	async function handleUninstall() {
 		try {
+			console.log("Handling uninstall with action:", action);
 			let success = false;
-			let resultAction: UninstallResult["action"] = "single";
-
-			const currentModName = modName;
-			const currentModPath = modPath;
 
 			if (action === "cascade") {
-				await invoke("cascade_uninstall", {
-					rootMod: currentModName.toUpperCase(),
-				});
+				await invoke("cascade_uninstall", { rootMod: modName });
 				success = true;
-				resultAction = "cascade";
 			} else if (action === "force") {
 				await invoke("force_remove_mod", {
-					name: currentModName,
-					path: currentModPath,
+					name: modName,
+					path: modPath,
 				});
 				success = true;
-				resultAction = "force";
 			} else if (action === null) {
-				// Add this case
 				await invoke("remove_installed_mod", {
-					name: currentModName,
-					path: currentModPath,
+					name: modName,
+					path: modPath,
 				});
 				success = true;
-				resultAction = "single";
 			}
 
-			if (success) {
-				show = false;
-				onUninstalled?.({
-					success: true,
-					action: resultAction,
+			if (success && onUninstalled) {
+				onUninstalled({
+					detail: {
+						modName,
+						success: true,
+						action: action || "single",
+					},
 				});
 			}
+
+			// Close the dialog
+			show = false;
+			// Also update the store
+			uninstallDialogStore.update((s) => ({ ...s, show: false }));
 		} catch (e) {
-			onError?.(e);
+			console.error("Uninstall error:", e);
+			onError?.({ detail: e });
 		}
 	}
 
 	function closeDialog() {
 		show = false;
+		uninstallDialogStore.update((s) => ({ ...s, show: false }));
 	}
 </script>
 
@@ -75,7 +93,7 @@
 		<div class="dialog-content" transition:scale={{ duration: 200 }}>
 			<h2>Uninstall {modName}?</h2>
 
-			{#if dependents && dependents.length > 0}
+			{#if dependents.length > 0}
 				<div class="dependency-list">
 					<h3>{modName} is required for:</h3>
 					<div class="scroll-container">
@@ -117,13 +135,11 @@
 						onclick={() => {
 							action = null;
 							handleUninstall();
-						}}
+						}}>Confirm</button
 					>
-						Confirm
-					</button>
-					<button onclick={closeDialog} class="force-button">
-						Cancel
-					</button>
+					<button onclick={closeDialog} class="force-button"
+						>Cancel</button
+					>
 				</div>
 			{/if}
 		</div>

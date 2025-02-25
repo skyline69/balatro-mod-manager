@@ -168,26 +168,38 @@
 			console.error("Failed to get installed mods:", e);
 		}
 	};
+
 	const uninstallMod = async (mod: Mod) => {
+		console.log("Uninstall called for mod:", mod.title);
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
+		console.log("Is core mod:", isCoreMod);
+
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
-				(m) => m.name === mod.title,
+				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
+			console.log("Found installed mod:", installedMod);
+
 			if (!installedMod) return;
+
 			if (isCoreMod) {
+				// Get dependents
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
+				console.log("Dependents found:", dependents);
+
+				// Always show the dialog for core mods
 				uninstallDialogStore.set({
 					show: true,
 					modName: mod.title,
 					modPath: installedMod.path,
 					dependents,
 				});
+				console.log("Dialog store updated:", uninstallDialogStore);
 			} else {
 				await invoke("remove_installed_mod", {
 					name: mod.title,
@@ -202,31 +214,59 @@
 			console.error("Failed to uninstall mod:", e);
 		}
 	};
+
 	const installMod = async (mod: Mod) => {
-		const dependencies = [];
-		if (mod.requires_steamodded) dependencies.push("Steamodded");
-		if (mod.requires_talisman) dependencies.push("Talisman");
+		console.log("Install called for mod:", mod.title);
+		console.log("Requires Steamodded:", mod.requires_steamodded);
+		console.log("Requires Talisman:", mod.requires_talisman);
+
+		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
+			console.log("Checking dependencies");
+
+			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Steamodded",
 					})
 				: true;
+			console.log("Steamodded installed:", steamoddedInstalled);
+
+			// Check Talisman if required
 			const talismanInstalled = mod.requires_talisman
 				? await invoke<boolean>("check_mod_installation", {
 						modType: "Talisman",
 					})
 				: true;
-			if (!steamoddedInstalled || !talismanInstalled) {
+			console.log("Talisman installed:", talismanInstalled);
+
+			// If any dependency is missing, show the RequiresPopup
+
+			if (
+				(mod.requires_steamodded && !steamoddedInstalled) ||
+				(mod.requires_talisman && !talismanInstalled)
+			) {
+				console.log(
+					"Dependencies missing - calling onCheckDependencies",
+				);
+
+				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
 					talisman: mod.requires_talisman && !talismanInstalled,
 				});
-				return;
+				return; // Stop installation
 			}
 		}
+
+		// Build dependencies list for the database
+		const dependencies = [];
+		if (mod.requires_steamodded) dependencies.push("Steamodded");
+		if (mod.requires_talisman) dependencies.push("Talisman");
+
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
 			if (mod.title.toLowerCase() === "steamodded") {
 				let installedPath;
 				if (selectedVersion === "newest") {
@@ -297,6 +337,7 @@
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
+
 	function handleMarkdownClick(event: MouseEvent | KeyboardEvent) {
 		const anchor = (event.target as HTMLElement).closest("a");
 		if (anchor && anchor.href.startsWith("http")) {

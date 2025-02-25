@@ -59,6 +59,16 @@
 		);
 	}
 
+	function onError(event: { detail: unknown }) {
+		showError(event.detail);
+	}
+
+	function onUninstalled(event: {
+		detail: { modName: string; success: boolean; action: string };
+	}) {
+		handleRefresh();
+	}
+
 	let modRequirements = $state({
 		steamodded: false,
 		talisman: false,
@@ -170,8 +180,8 @@
 		modName={selectedMod?.name ?? ""}
 		modPath={selectedMod?.path ?? ""}
 		bind:dependents={$dependentsStore}
-		onUninstalled={handleRefresh}
-		onError={showError}
+		{onUninstalled}
+		{onError}
 	/>
 
 	<div class="version-text">v0.1.4</div>

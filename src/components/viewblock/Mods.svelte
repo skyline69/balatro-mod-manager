@@ -33,7 +33,7 @@
 		modsStore,
 		installationStatus,
 		loadingStates2 as loadingStates,
-	} from "../../stores/modStore"
+	} from "../../stores/modStore";
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
@@ -145,35 +145,38 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
+		console.log("Uninstall called for mod:", mod.title);
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
+		console.log("Is core mod:", isCoreMod);
 
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
+			console.log("Found installed mod:", installedMod);
 
 			if (!installedMod) return;
 
 			if (isCoreMod) {
-				// Force uppercase for core mod names
+				// Get dependents
 				const dependents = await invoke<string[]>("get_dependents", {
-					modName: mod.title.toUpperCase(), // Match Rust enum naming
+					modName: mod.title,
 				});
+				console.log("Dependents found:", dependents);
 
-				await tick();
-
-				// Use store object directly
-				uninstallDialogStore.update((s: Record<string, any>) => ({
-					...s,
+				// Set the dialog properties directly
+				uninstallDialogStore.set({
 					show: true,
 					modName: mod.title,
 					modPath: installedMod.path,
 					dependents,
-				}));
+				});
+				console.log("Dialog store updated:", $uninstallDialogStore);
 			} else {
+				// For non-core mods
 				await invoke("remove_installed_mod", {
 					name: mod.title,
 					path: installedMod.path,
@@ -188,55 +191,87 @@
 			addMessage(`Uninstall failed: ${error}`, "error");
 		}
 	};
+
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
+		console.log("Install called for mod:", mod.title);
+		console.log("Requires Steamodded:", mod.requires_steamodded);
+		console.log("Requires Talisman:", mod.requires_talisman);
 
 		try {
-			// Check dependencies first
+			// Check for dependencies
 			if (mod.requires_steamodded || mod.requires_talisman) {
-				const [steamoddedInstalled, talismanInstalled] =
-					await Promise.all([
-						mod.requires_steamodded
-							? invoke<boolean>("check_mod_installation", {
-									modType: "Steamodded",
-								})
-							: true,
-						mod.requires_talisman
-							? invoke<boolean>("check_mod_installation", {
-									modType: "Talisman",
-								})
-							: true,
-					]);
+				console.log("Checking dependencies");
 
-				if (!steamoddedInstalled || !talismanInstalled) {
-					handleDependencyCheck({
+				// Check Steamodded if required
+				const steamoddedInstalled = mod.requires_steamodded
+					? await invoke<boolean>("check_mod_installation", {
+							modType: "Steamodded",
+						})
+					: true;
+				console.log("Steamodded installed:", steamoddedInstalled);
+
+				// Check Talisman if required
+				const talismanInstalled = mod.requires_talisman
+					? await invoke<boolean>("check_mod_installation", {
+							modType: "Talisman",
+						})
+					: true;
+				console.log("Talisman installed:", talismanInstalled);
+
+				// If any dependency is missing, show the RequiresPopup
+				if (
+					(mod.requires_steamodded && !steamoddedInstalled) ||
+					(mod.requires_talisman && !talismanInstalled)
+				) {
+					console.log(
+						"Dependencies missing - calling handleDependencyCheck",
+					);
+
+					// Call the handler with the appropriate requirements
+					const requirements = {
 						steamodded:
 							mod.requires_steamodded && !steamoddedInstalled,
 						talisman: mod.requires_talisman && !talismanInstalled,
-					});
-					return; // Stop installation until dependencies are resolved
+					};
+					console.log("Requirements:", requirements);
+					handleDependencyCheck(requirements);
+					return; // Stop installation
 				}
 			}
 
 			// Proceed with installation
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
+			// Create dependencies array for the database
+			const dependencies = [];
+			if (mod.requires_steamodded) dependencies.push("Steamodded");
+			if (mod.requires_talisman) dependencies.push("Talisman");
+
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
+			console.log("Mod installed at:", installedPath);
 
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				dependencies: [],
+				dependencies,
 			});
+			console.log("Mod added to database");
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 		} catch (error) {
 			console.error("Failed to install mod:", error);
+			addMessage(
+				`Installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				"error",
+			);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
 	};
+
 	const isModInstalled = async (mod: Mod) => {
 		if (!mod?.title) return false;
 		await getAllInstalledMods();
@@ -633,7 +668,7 @@
 			<p class="loading-text">Loading mods{".".repeat($loadingDots)}</p>
 		</div>
 	{:else if showSearch}
-		<SearchView />
+		<SearchView onCheckDependencies={handleDependencyCheck} />
 	{:else}
 		<div class="mods-wrapper">
 			<div class="controls-container">
@@ -766,7 +801,10 @@
 </div>
 
 {#if $currentModView}
-	<ModView mod={$currentModView!} />
+	<ModView
+		mod={$currentModView!}
+		onCheckDependencies={handleDependencyCheck}
+	/>
 {/if}
 
 <style>
