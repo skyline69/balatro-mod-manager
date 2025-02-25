@@ -144,18 +144,15 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
-		console.log("Uninstall called for mod:", mod.title);
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
-		console.log("Is core mod:", isCoreMod);
 
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
-			console.log("Found installed mod:", installedMod);
 
 			if (!installedMod) return;
 
@@ -164,7 +161,6 @@
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
-				console.log("Dependents found:", dependents);
 
 				// Set the dialog properties directly
 				uninstallDialogStore.set({
@@ -173,7 +169,6 @@
 					modPath: installedMod.path,
 					dependents,
 				});
-				console.log("Dialog store updated:", $uninstallDialogStore);
 			} else {
 				// For non-core mods
 				await invoke("remove_installed_mod", {
@@ -193,14 +188,9 @@
 
 	const installMod = async (mod: Mod) => {
 		if (!mod?.title || !mod?.downloadURL) return;
-		console.log("Install called for mod:", mod.title);
-		console.log("Requires Steamodded:", mod.requires_steamodded);
-		console.log("Requires Talisman:", mod.requires_talisman);
-
 		try {
 			// Check for dependencies
 			if (mod.requires_steamodded || mod.requires_talisman) {
-				console.log("Checking dependencies");
 
 				// Check Steamodded if required
 				const steamoddedInstalled = mod.requires_steamodded
@@ -208,7 +198,6 @@
 							modType: "Steamodded",
 						})
 					: true;
-				console.log("Steamodded installed:", steamoddedInstalled);
 
 				// Check Talisman if required
 				const talismanInstalled = mod.requires_talisman
@@ -216,16 +205,12 @@
 							modType: "Talisman",
 						})
 					: true;
-				console.log("Talisman installed:", talismanInstalled);
 
 				// If any dependency is missing, show the RequiresPopup
 				if (
 					(mod.requires_steamodded && !steamoddedInstalled) ||
 					(mod.requires_talisman && !talismanInstalled)
 				) {
-					console.log(
-						"Dependencies missing - calling handleDependencyCheck",
-					);
 
 					// Call the handler with the appropriate requirements
 					const requirements = {
@@ -233,7 +218,6 @@
 							mod.requires_steamodded && !steamoddedInstalled,
 						talisman: mod.requires_talisman && !talismanInstalled,
 					};
-					console.log("Requirements:", requirements);
 					handleDependencyCheck(requirements);
 					return; // Stop installation
 				}
@@ -250,14 +234,12 @@
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
 			});
-			console.log("Mod installed at:", installedPath);
 
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
 				dependencies,
 			});
-			console.log("Mod added to database");
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
 		} catch (error) {
@@ -396,15 +378,23 @@
 							const lastUpdated =
 								timestamps[dirName] || Date.now();
 
+							// Log category mapping for debugging
+
+							// Ensure categories are properly mapped
+							const mappedCategories = meta.categories
+								.map((cat) => {
+									return categoryMap[cat] ?? null;
+								})
+								.filter((cat): cat is Category => cat !== null);
+
+
 							return {
 								title: meta.title,
 								description,
 								image: imageData || "images/cover.jpg",
 								lastUpdated: lastUpdated.toString(),
 								colors: getRandomColorPair(),
-								categories: meta.categories
-									.map((cat) => categoryMap[cat])
-									.filter(Boolean),
+								categories: mappedCategories,
 								requires_steamodded:
 									meta["requires-steamodded"],
 								requires_talisman: meta["requires-talisman"],
@@ -489,12 +479,21 @@
 
 	const categoryMap: Record<string, Category> = {
 		Content: Category.Content,
+		content: Category.Content,
 		Joker: Category.Joker,
+		joker: Category.Joker,
 		"Quality of Life": Category.QualityOfLife,
+		"quality of life": Category.QualityOfLife,
 		Technical: Category.Technical,
+		technical: Category.Technical,
 		Miscellaneous: Category.Miscellaneous,
+		miscellaneous: Category.Miscellaneous,
 		"Resource Packs": Category.ResourcePacks,
+		"resource packs": Category.ResourcePacks,
+		Resources: Category.ResourcePacks,
+		resources: Category.ResourcePacks,
 		API: Category.API,
+		api: Category.API,
 	};
 
 	function getRandomColorPair() {
@@ -513,19 +512,42 @@
 	$: filteredMods = $modsStore.filter((mod) => {
 		switch ($currentCategory) {
 			case "Content":
-				return mod.categories.includes(Category.Content);
+				return (
+					mod.categories.length === 0 ||
+					mod.title.toLowerCase().includes("content") ||
+					(typeof mod.description === "string" &&
+						mod.description.toLowerCase().includes("new content"))
+				);
 			case "Joker":
-				return mod.categories.includes(Category.Joker);
+				return (
+					mod.categories.includes(Category.Joker) ||
+					mod.categories.some((cat) => cat === 1)
+				);
 			case "Quality of Life":
-				return mod.categories.includes(Category.QualityOfLife);
+				return (
+					mod.categories.includes(Category.QualityOfLife) ||
+					mod.categories.some((cat) => cat === 2)
+				);
 			case "Technical":
-				return mod.categories.includes(Category.Technical);
+				return (
+					mod.categories.includes(Category.Technical) ||
+					mod.categories.some((cat) => cat === 3)
+				);
 			case "Resource Packs":
-				return mod.categories.includes(Category.ResourcePacks);
+				return (
+					mod.categories.includes(Category.ResourcePacks) ||
+					mod.categories.some((cat) => cat === 5)
+				);
 			case "API":
-				return mod.categories.includes(Category.API);
+				return (
+					mod.categories.includes(Category.API) ||
+					mod.categories.some((cat) => cat === 6)
+				);
 			case "Miscellaneous":
-				return mod.categories.includes(Category.Miscellaneous);
+				return (
+					mod.categories.includes(Category.Miscellaneous) ||
+					mod.categories.some((cat) => cat === 4)
+				);
 			case "Installed Mods":
 				return $installationStatus[mod.title];
 			default:

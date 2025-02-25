@@ -24,14 +24,12 @@
 
 	onMount(() => {
 		const unsubscribe = uninstallDialogStore.subscribe((state) => {
-			console.log("Dialog store changed:", state);
 			// If the store says to show, update our local props
 			if (state.show) {
 				show = state.show;
 				modName = state.modName;
 				modPath = state.modPath;
 				dependents = state.dependents;
-				console.log("Dialog props updated from store");
 			}
 		});
 
@@ -42,7 +40,6 @@
 
 	async function handleUninstall() {
 		try {
-			console.log("Handling uninstall with action:", action);
 			let success = false;
 
 			if (action === "cascade") {

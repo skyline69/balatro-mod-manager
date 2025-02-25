@@ -3,7 +3,6 @@
 	import { cubicOut } from "svelte/easing";
 	import {
 		Download,
-		Clock,
 		Trash2,
 		User,
 		ArrowLeft,
@@ -166,18 +165,15 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
-		console.log("Uninstall called for mod:", mod.title);
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
-		console.log("Is core mod:", isCoreMod);
 
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
-			console.log("Found installed mod:", installedMod);
 
 			if (!installedMod) return;
 
@@ -186,7 +182,6 @@
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
-				console.log("Dependents found:", dependents);
 
 				// Always show the dialog for core mods
 				uninstallDialogStore.set({
@@ -195,7 +190,6 @@
 					modPath: installedMod.path,
 					dependents,
 				});
-				console.log("Dialog store updated:", uninstallDialogStore);
 			} else {
 				await invoke("remove_installed_mod", {
 					name: mod.title,
@@ -212,13 +206,8 @@
 	};
 
 	const installMod = async (mod: Mod) => {
-		console.log("Install called for mod:", mod.title);
-		console.log("Requires Steamodded:", mod.requires_steamodded);
-		console.log("Requires Talisman:", mod.requires_talisman);
-
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
-			console.log("Checking dependencies");
 
 			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
@@ -226,7 +215,6 @@
 						modType: "Steamodded",
 					})
 				: true;
-			console.log("Steamodded installed:", steamoddedInstalled);
 
 			// Check Talisman if required
 			const talismanInstalled = mod.requires_talisman
@@ -234,7 +222,6 @@
 						modType: "Talisman",
 					})
 				: true;
-			console.log("Talisman installed:", talismanInstalled);
 
 			// If any dependency is missing, show the RequiresPopup
 
@@ -242,9 +229,6 @@
 				(mod.requires_steamodded && !steamoddedInstalled) ||
 				(mod.requires_talisman && !talismanInstalled)
 			) {
-				console.log(
-					"Dependencies missing - calling onCheckDependencies",
-				);
 
 				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
@@ -511,7 +495,7 @@
 					</div>
 				{/if}
 				<div class="mod-stats">
-					<span><Clock size={16} /> {mod.lastUpdated}</span>
+					<!-- <span><Clock size={16} /> {mod.lastUpdated}</span> -->
 					<span><User size={16} /> {mod.publisher}</span>
 				</div>
 				{#if mod.repo}

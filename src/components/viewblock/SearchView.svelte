@@ -52,18 +52,15 @@
 	};
 
 	const uninstallMod = async (mod: Mod) => {
-		console.log("Uninstall called for mod:", mod.title);
 		const isCoreMod = ["steamodded", "talisman"].includes(
 			mod.title.toLowerCase(),
 		);
-		console.log("Is core mod:", isCoreMod);
 
 		try {
 			await getAllInstalledMods();
 			const installedMod = installedMods.find(
 				(m) => m.name.toLowerCase() === mod.title.toLowerCase(),
 			);
-			console.log("Found installed mod:", installedMod);
 
 			if (!installedMod) {
 				console.error("Mod not found in installed mods");
@@ -75,7 +72,6 @@
 				const dependents = await invoke<string[]>("get_dependents", {
 					modName: mod.title,
 				});
-				console.log("Dependents found:", dependents);
 
 				// Always show dialog for core mods, even if no dependents
 				uninstallDialogStore.set({
@@ -84,7 +80,6 @@
 					modPath: installedMod.path,
 					dependents,
 				});
-				console.log("Dialog store updated:", uninstallDialogStore);
 			} else {
 				// Immediate uninstall for normal mods
 				await invoke("remove_installed_mod", {
@@ -102,13 +97,8 @@
 	};
 
 	const installMod = async (mod: Mod) => {
-		console.log("Install called for mod:", mod.title);
-		console.log("Requires Steamodded:", mod.requires_steamodded);
-		console.log("Requires Talisman:", mod.requires_talisman);
-
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
-			console.log("Checking dependencies");
 
 			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
@@ -116,7 +106,6 @@
 						modType: "Steamodded",
 					})
 				: true;
-			console.log("Steamodded installed:", steamoddedInstalled);
 
 			// Check Talisman if required
 			const talismanInstalled = mod.requires_talisman
@@ -124,16 +113,12 @@
 						modType: "Talisman",
 					})
 				: true;
-			console.log("Talisman installed:", talismanInstalled);
 
 			// If any dependency is missing, show the RequiresPopup
 			if (
 				(mod.requires_steamodded && !steamoddedInstalled) ||
 				(mod.requires_talisman && !talismanInstalled)
 			) {
-				console.log(
-					"Dependencies missing - calling onCheckDependencies",
-				);
 
 				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
@@ -222,10 +207,8 @@
 		try {
 			const searchTerm = searchQuery.toLowerCase();
 			const results = searchIndex.search(searchTerm);
-			// console.log("Search results:", results); // Debug
 
 			searchResults = results.map((idx: number) => mods[idx]);
-			// console.log("Mapped results:", searchResults); // Debug
 		} catch (error) {
 			console.error("Search failed:", error);
 			searchResults = [];
