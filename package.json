@@ -27,14 +27,14 @@
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.17.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "lucide-svelte": "^0.475.0",
+    "lucide-svelte": "^0.476.0",
     "marked": "^15.0.7",
-    "svelte": "^5.20.2",
+    "svelte": "^5.20.4",
     "svelte-check": "^4.1.4",
     "svelte-confetti": "^2.3.1",
     "tslib": "^2.8.1",
     "typescript": "^5.7.3",
-    "vite": "^6.1.1",
+    "vite": "^6.2.0",
     "@tauri-apps/cli": "^2.2.7"
   }
 }
