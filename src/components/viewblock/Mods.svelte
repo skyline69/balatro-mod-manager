@@ -191,7 +191,6 @@
 		try {
 			// Check for dependencies
 			if (mod.requires_steamodded || mod.requires_talisman) {
-
 				// Check Steamodded if required
 				const steamoddedInstalled = mod.requires_steamodded
 					? await invoke<boolean>("check_mod_installation", {
@@ -211,7 +210,6 @@
 					(mod.requires_steamodded && !steamoddedInstalled) ||
 					(mod.requires_talisman && !talismanInstalled)
 				) {
-
 					// Call the handler with the appropriate requirements
 					const requirements = {
 						steamodded:
@@ -386,7 +384,6 @@
 									return categoryMap[cat] ?? null;
 								})
 								.filter((cat): cat is Category => cat !== null);
-
 
 							return {
 								title: meta.title,
@@ -832,7 +829,15 @@
 	.mods-container {
 		display: flex;
 		gap: 1rem;
-		height: 100%;
+		height: 95%;
+	}
+
+	.mod-info > p {
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
 	}
 
 	.separator {
@@ -888,6 +893,7 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1rem;
+		padding-bottom: 1rem;
 		padding: 0 1rem;
 	}
 
@@ -1272,6 +1278,13 @@
 
 		.controls-container {
 			margin-bottom: 0.5rem;
+		}
+
+		.mods-container {
+			height: 100%;
+		}
+		.mods-grid {
+			padding: 0;
 		}
 	}
 </style>

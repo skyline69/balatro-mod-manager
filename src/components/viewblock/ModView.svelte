@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { fly } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
-	import {
-		Download,
-		Trash2,
-		User,
-		ArrowLeft,
-		Github,
-	} from "lucide-svelte";
+	import { Download, Trash2, User, ArrowLeft, Github } from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { open } from "@tauri-apps/plugin-shell";
 	import {
@@ -208,7 +202,6 @@
 	const installMod = async (mod: Mod) => {
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
-
 			// Check Steamodded if required
 			const steamoddedInstalled = mod.requires_steamodded
 				? await invoke<boolean>("check_mod_installation", {
@@ -229,7 +222,6 @@
 				(mod.requires_steamodded && !steamoddedInstalled) ||
 				(mod.requires_talisman && !talismanInstalled)
 			) {
-
 				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
 					steamodded: mod.requires_steamodded && !steamoddedInstalled,
@@ -680,6 +672,10 @@
 		color: #f4eee0;
 	}
 
+	:global(.description > p > img) {
+		width: 100%;
+	}
+
 	.description {
 		font-size: 1.2rem;
 		line-height: 1;
@@ -688,7 +684,67 @@
 		padding: 1.25rem;
 		border-radius: 6px;
 		width: 50rem;
-		/* height: 21.5rem; */
+		line-height: 1.5;
+	}
+
+	/* Improved inline code styling */
+	.description :global(code) {
+		background: rgba(50, 50, 50, 0.7);
+		color: #e6e1cf;
+		padding: 0.2em 0.4em;
+		border-radius: 3px;
+		font-family: "Consolas", "Monaco", "Menlo", monospace;
+		font-size: 0.75em;
+	}
+
+	/* Improved code block styling */
+	.description :global(pre) {
+		background: rgba(40, 40, 40, 0.8);
+		padding: 1em;
+		border-radius: 6px;
+		overflow-x: auto;
+		margin: 1em 0;
+		border: 1px solid rgba(100, 100, 100, 0.3);
+	}
+
+	/* Style code within pre blocks differently than inline code */
+	.description :global(pre code) {
+		background: transparent;
+		padding: 0;
+		color: #f4eee0;
+		display: block;
+		line-height: 1.5;
+		white-space: pre;
+	}
+
+	/* Add syntax highlighting colors */
+	.description :global(.token.keyword),
+	.description :global(.token.operator) {
+		color: #ff7b72;
+	}
+
+	.description :global(.token.string),
+	.description :global(.token.char) {
+		color: #a5d6ff;
+	}
+
+	.description :global(.token.function),
+	.description :global(.token.method) {
+		color: #d2a8ff;
+	}
+
+	.description :global(.token.number) {
+		color: #f8c555;
+	}
+
+	.description :global(.token.comment) {
+		color: #8b949e;
+		font-style: italic;
+	}
+
+	.description :global(.token.boolean),
+	.description :global(.token.constant) {
+		color: #79c0ff;
 	}
 
 	.back-button {
@@ -734,21 +790,6 @@
 
 	.description :global(li) {
 		margin-bottom: 0.5em;
-	}
-
-	.description :global(code) {
-		background: rgba(244, 238, 224, 0.1);
-		padding: 0.2em 0.4em;
-		border-radius: 3px;
-		font-family: monospace;
-	}
-
-	.description :global(pre) {
-		background: rgba(244, 238, 224, 0.1);
-		padding: 1em;
-		border-radius: 6px;
-		overflow-x: auto;
-		margin: 1em 0;
 	}
 
 	.description :global(a) {
