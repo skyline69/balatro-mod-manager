@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 #[cfg(target_os = "windows")]
-use std::fs::{self, File};
+use std::fs::File;
 #[cfg(target_os = "macos")]
 use std::fs::{self, File};
 #[cfg(target_os = "macos")]
