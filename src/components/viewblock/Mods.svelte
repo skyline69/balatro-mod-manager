@@ -271,7 +271,7 @@
 		downloadURL?: string;
 	}
 
-	const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 	// const CACHE_DURATION = 5 * 1000; // 5 seconds
 
 	async function saveToCache(mods: Mod[]) {

@@ -1,5 +1,6 @@
+mod github_repo;
+
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use git2::{FetchOptions, RemoteCallbacks, Repository};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 // use tauri::WebviewUrl;
@@ -74,9 +75,7 @@ async fn get_repo_path() -> Result<String, String> {
 
 #[tauri::command]
 async fn clone_repo(url: &str, path: &str) -> Result<(), String> {
-    let path = PathBuf::from(path);
-    Repository::clone(url, &path).map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-    Ok(())
+    github_repo::clone_repository(url, path).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,103 +113,26 @@ async fn get_mod_thumbnail(modPath: String) -> Result<Option<String>, String> {
 #[allow(non_snake_case)]
 #[tauri::command]
 async fn get_mod_timestamps(repoPath: String) -> Result<HashMap<String, i64>, String> {
-    let repo = Repository::open(&repoPath)
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let mut revwalk = repo
-        .revwalk()
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-    revwalk
-        .push_head()
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let mut timestamps = HashMap::new();
-    for oid in revwalk.filter_map(Result::ok) {
-        let commit = repo
-            .find_commit(oid)
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-        let tree = commit
-            .tree()
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-        for entry in tree.iter() {
-            // let entry = entry.map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-            let name = entry
-                .name()
-                .ok_or_else(|| AppError::GitOperation("Invalid filename".to_string()))?;
-
-            if name.starts_with("mods/") {
-                let mod_name = name.trim_start_matches("mods/").split('/').next().unwrap();
-                let entry_time = commit.time().seconds();
-
-                timestamps
-                    .entry(mod_name.to_string())
-                    .and_modify(|e| {
-                        if entry_time > *e {
-                            *e = entry_time
-                        }
-                    })
-                    .or_insert(entry_time);
-            }
-        }
-    }
-
-    Ok(timestamps)
+    github_repo::get_mod_timestamps(&repoPath).await
 }
 
 #[tauri::command]
 async fn pull_repo(path: &str) -> Result<(), String> {
-    let repo =
-        Repository::open(path).map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let mut remote = repo
-        .find_remote("origin")
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, _username_from_url, _allowed_types| {
-        git2::Cred::userpass_plaintext("git", "")
-    });
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-
-    remote
-        .fetch(&["main"], Some(&mut fetch_options), None)
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let fetch_head = repo
-        .find_reference("FETCH_HEAD")
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let fetch_commit = repo
-        .reference_to_annotated_commit(&fetch_head)
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    let analysis = repo
-        .merge_analysis(&[&fetch_commit])
-        .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-    if analysis.0.is_up_to_date() {
-        Ok(())
-    } else if analysis.0.is_fast_forward() {
-        let mut reference = repo
-            .find_reference("refs/remotes/origin/main")
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-        reference
-            .set_target(fetch_commit.id(), "Fast-Forward")
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-        repo.set_head("refs/remotes/origin/main")
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
-            .map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-        Ok(())
-    } else {
-        Err(AppError::GitOperation("Merge required".to_string()).to_string())
+    // Check if directory exists
+    let path_buf = PathBuf::from(path);
+    if !path_buf.exists() {
+        return Err(format!("Directory '{}' does not exist", path));
     }
+
+    // Check if it's a repository
+    if !github_repo::is_repository_directory(path) {
+        // Auto-clone if it doesn't look like a repository
+        let repo_url = "https://github.com/skyline69/balatro-mod-index"; // Default repository URL
+        return github_repo::clone_repository(repo_url, path).await;
+    }
+
+    // Proceed with pull if it's a valid repository
+    github_repo::pull_repository(path).await
 }
 
 #[tauri::command]
@@ -877,9 +799,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Get app handle first
-            // let app_handle = app.handle();
-
             // Initialize database with error handling
             let db = map_error(Database::new())?;
 
@@ -949,6 +868,7 @@ pub fn run() {
             get_mod_thumbnail,
         ])
         .run(tauri::generate_context!());
+
     if let Err(e) = result {
         log::error!("Failed to run application: {}", e);
         std::process::exit(1);

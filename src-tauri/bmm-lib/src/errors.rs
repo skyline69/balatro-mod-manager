@@ -208,14 +208,6 @@ impl<T> From<std::sync::PoisonError<T>> for AppError {
     }
 }
 
-//             let entry = entry.map_err(|e| AppError::GitOperation(e.to_string()).to_string())?;
-
-impl From<git2::Error> for AppError {
-    fn from(err: git2::Error) -> Self {
-        AppError::GitOperation(err.to_string())
-    }
-}
-
 // For Tauri command result compatibility
 impl From<AppError> for String {
     fn from(err: AppError) -> Self {
