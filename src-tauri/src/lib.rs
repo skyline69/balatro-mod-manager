@@ -443,7 +443,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         let exe_path = path.join("Balatro.exe");
 
         // Check if version.dll exists, if not download it
-        let dll_path = ensure_version_dll_exists(&path).await?;
+        let dll_path = lovely::ensure_version_dll_exists(&path).await?;
         log::debug!("Using version.dll at {}", dll_path.display());
 
         // Launch the game
