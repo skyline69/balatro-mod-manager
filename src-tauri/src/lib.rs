@@ -439,18 +439,14 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
     #[cfg(target_os = "windows")]
     {
-        // Paths for the executable and the version DLL.
+        // Paths for the executable
         let exe_path = path.join("Balatro.exe");
-        let dll_path = path.join("version.dll");
 
-        // At launch, if a version.dll doesn't exist in the game directory,create it.
-        if !dll_path.exists() {
-            // Write the embedded version.dll (replace lovely::EMBEDDED_DLL with your DLL's data) to the game folder.
-            std::fs::write(&dll_path, lovely::EMBEDDED_DLL)
-                .map_err(|e| format!("Failed to write version.dll: {}", e))?;
-            log::debug!("Written version.dll to {}", dll_path.display());
-        }
-        // Launch the game normally.
+        // Check if version.dll exists, if not download it
+        let dll_path = ensure_version_dll_exists(&path).await?;
+        log::debug!("Using version.dll at {}", dll_path.display());
+
+        // Launch the game
         if lovely_console_enabled {
             Command::new(&exe_path)
                 .current_dir(&path)
@@ -466,7 +462,37 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
         log::debug!("Launched Balatro from {}", exe_path.display());
     }
-
+    //
+    // #[cfg(target_os = "windows")]
+    // {
+    //     // Paths for the executable and the version DLL.
+    //     let exe_path = path.join("Balatro.exe");
+    //     let dll_path = path.join("version.dll");
+    //
+    //     // At launch, if a version.dll doesn't exist in the game directory,create it.
+    //     if !dll_path.exists() {
+    //         // Write the embedded version.dll (replace lovely::EMBEDDED_DLL with your DLL's data) to the game folder.
+    //         std::fs::write(&dll_path, lovely::EMBEDDED_DLL)
+    //             .map_err(|e| format!("Failed to write version.dll: {}", e))?;
+    //         log::debug!("Written version.dll to {}", dll_path.display());
+    //     }
+    //     // Launch the game normally.
+    //     if lovely_console_enabled {
+    //         Command::new(&exe_path)
+    //             .current_dir(&path)
+    //             .spawn()
+    //             .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+    //     } else {
+    //         Command::new(&exe_path)
+    //             .current_dir(&path)
+    //             .arg("--disable-console")
+    //             .spawn()
+    //             .map_err(|e| format!("Failed to launch Balatro.exe: {}", e))?;
+    //     }
+    //
+    //     log::debug!("Launched Balatro from {}", exe_path.display());
+    // }
+    //
     Ok(())
 }
 
