@@ -14,7 +14,6 @@
 	} from "lucide-svelte";
 	import ModView from "./ModView.svelte";
 	import { fly } from "svelte/transition";
-	import { tick } from "svelte";
 	import {
 		SortOption,
 		backgroundEnabled,

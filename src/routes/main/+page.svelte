@@ -63,7 +63,7 @@
 		showError(event.detail);
 	}
 
-	function onUninstalled(event: {
+	function onUninstalled(_event: {
 		detail: { modName: string; success: boolean; action: string };
 	}) {
 		handleRefresh();

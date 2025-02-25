@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Clock, Download, Search, Trash2 } from "lucide-svelte";
+	import { Download, Search, Trash2 } from "lucide-svelte";
 	import type { InstalledMod, Mod } from "../../stores/modStore";
 	import { onMount } from "svelte";
 	import {
@@ -13,7 +13,6 @@
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import { currentModView } from "../../stores/modStore";
 	import { invoke } from "@tauri-apps/api/core";
-	import { tick } from "svelte";
 
 	let searchQuery = $state("");
 	let searchResults = $state<Mod[]>([]);
