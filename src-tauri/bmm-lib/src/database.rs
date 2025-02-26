@@ -76,6 +76,30 @@ impl Database {
         Ok(())
     }
 
+    pub fn set_discord_rpc_enabled(&self, enabled: bool) -> Result<(), AppError> {
+        let value = if enabled { "enabled" } else { "disabled" };
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('discord_rpc', ?1)",
+            [value],
+        )?;
+        Ok(())
+    }
+
+    pub fn is_discord_rpc_enabled(&self) -> Result<bool, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'discord_rpc'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(row.get::<_, String>(0)? == "enabled")
+        } else {
+            // Default to enabled if setting doesn't exist yet
+            self.set_discord_rpc_enabled(true)?;
+            Ok(true)
+        }
+    }
+
     pub fn set_last_fetched(&self, timestamp: u64) -> Result<(), AppError> {
         self.conn.execute(
             "INSERT OR REPLACE INTO settings (setting, value) VALUES ('last_fetched', ?1)",

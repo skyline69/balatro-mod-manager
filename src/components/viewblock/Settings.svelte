@@ -14,6 +14,7 @@
 		removedFiles: 0,
 		cleanedEntries: 0,
 	};
+	let isDiscordRpcEnabled = false;
 
 	export async function performReindexMods() {
 		isReindexing = true;
@@ -93,6 +94,25 @@
 			isClearingCache = false;
 		}
 	}
+
+	async function handleDiscordRpcChange() {
+		const newValue = !isDiscordRpcEnabled;
+		try {
+			await invoke("set_discord_rpc_status", { enabled: newValue });
+			isDiscordRpcEnabled = newValue;
+			addMessage(
+				`Discord Rich Presence ${newValue ? "enabled" : "disabled"}`,
+				"success",
+			);
+		} catch (error) {
+			console.error("Failed to set Discord RPC status:", error);
+			addMessage(
+				"Failed to update Discord Rich Presence status",
+				"error",
+			);
+		}
+	}
+
 	async function handleConsoleChange() {
 		const newValue = !isConsoleEnabled;
 		try {
@@ -125,6 +145,12 @@
 	}
 
 	onMount(async () => {
+		try {
+			isDiscordRpcEnabled = await invoke("get_discord_rpc_status");
+		} catch (error) {
+			console.error("Failed to get Discord RPC status:", error);
+			addMessage("Error fetching Discord Rich Presence status", "error");
+		}
 		try {
 			isConsoleEnabled = await invoke("get_lovely_console_status");
 		} catch (error) {
@@ -216,6 +242,23 @@
 		<p class="description-small">
 			Enable or disable the animated background. Disabling may improve
 			performance on low-end devices.
+		</p>
+
+		<div class="console-settings">
+			<span class="label-text">Enable Discord Rich Presence</span>
+			<div class="switch-container">
+				<label class="switch">
+					<input
+						type="checkbox"
+						checked={isDiscordRpcEnabled}
+						on:change={handleDiscordRpcChange}
+					/> <span class="slider"></span>
+				</label>
+			</div>
+		</div>
+		<p class="description-small">
+			Show your Balatro activity in Discord. Displays your current status
+			and mod manager usage.
 		</p>
 
 		<h3>Developer Options</h3>
