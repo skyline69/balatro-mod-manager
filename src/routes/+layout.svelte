@@ -3,6 +3,8 @@
 	import MessageStack from "../components/MessageStack.svelte";
 	import { backgroundEnabled } from "../stores/modStore"; // Add this import
 
+	import "../app.css";
+
 	export let data;
 </script>
 

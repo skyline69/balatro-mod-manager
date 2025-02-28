@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fly } from "svelte/transition";
+	import { fade } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
 	import { Download, Trash2, User, ArrowLeft, Github } from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
@@ -383,8 +383,8 @@
 />
 
 <div
-	class="mod-view"
-	transition:fly={{ x: 300, duration: 300, easing: cubicOut }}
+	class="mod-view default-scrollbar"
+	transition:fade={{ duration: 300, easing: cubicOut }}
 >
 	<button class="back-button" onclick={handleClose}>
 		<ArrowLeft size={20} /> <span>Back</span>
@@ -516,6 +516,10 @@
 </div>
 
 <style>
+	:global(.description > p > img) {
+		width: 100%;
+	}
+
 	.mod-view {
 		position: fixed;
 		top: 0;
@@ -528,27 +532,6 @@
 		z-index: 1000;
 		overflow-y: auto;
 		font-family: "M6X11", sans-serif;
-
-		&::-webkit-scrollbar {
-			width: 10px;
-		}
-
-		&::-webkit-scrollbar-track {
-			background: transparent;
-			border-radius: 15px;
-		}
-
-		&::-webkit-scrollbar-thumb {
-			background: #f4eee0;
-			border: 2px solid rgba(193, 65, 57, 0.8);
-			border-radius: 15px;
-		}
-		&::-webkit-scrollbar:horizontal {
-			display: none;
-		}
-		&::-webkit-scrollbar-corner {
-			background-color: transparent;
-		}
 	}
 
 	.mod-content {

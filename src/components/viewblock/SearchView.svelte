@@ -264,77 +264,78 @@
 		</form>
 	</div>
 
-	<div class="results-container">
-		{#if isSearching}
-			<p class="loading-text">Searching...</p>
-		{:else if searchResults.length === 0 && searchQuery.length >= 2}
-			<p>No mods found matching "{searchQuery}"</p>
-		{:else if searchResults.length > 0}
-			{#each searchResults as mod}
-				<div
-					class="mod-card"
-					onclick={() => handleModClick(mod)}
-					onkeydown={(e) => e.key === "Enter" && handleModClick(mod)}
-					role="button"
-					tabindex="0"
-					style="--orig-color1: {mod.colors
-						.color1}; --orig-color2: {mod.colors.color2};"
-				>
-					<div class="mod-image">
-						<img
-							src={mod.image}
-							alt={mod.title}
-							draggable="false"
-						/>
-						<div class="tags">
-							<!-- <span class="tag updated"> -->
-							<!-- 	<Clock size={13} /> -->
-							<!-- 	{mod.lastUpdated} -->
-							<!-- </span> -->
+	<div class="results-scroll-container default-scrollbar">
+		<div class="results-container">
+			{#if isSearching}
+				<p class="loading-text">Searching...</p>
+			{:else if searchResults.length === 0 && searchQuery.length >= 2}
+				<p>No mods found matching "{searchQuery}"</p>
+			{:else if searchResults.length > 0}
+				{#each searchResults as mod}
+					<div
+						class="mod-card"
+						onclick={() => handleModClick(mod)}
+						onkeydown={(e) => e.key === "Enter" && handleModClick(mod)}
+						role="button"
+						tabindex="0"
+						style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod.colors.color2};"
+					>
+						<div class="mod-image">
+							<img
+								src={mod.image}
+								alt={mod.title}
+								draggable="false"
+							/>
+							<div class="tags">
+								<!-- <span class="tag updated"> -->
+								<!-- 	<Clock size={13} /> -->
+								<!-- 	{mod.lastUpdated} -->
+								<!-- </span> -->
+							</div>
+						</div>
+						<div class="mod-info">
+							<h3>{mod.title}</h3>
+							<p>{truncateText(stripMarkdown(mod.description))}</p>
+						</div>
+						<div class="button-container">
+							<button
+								class="download-button"
+								class:installed={$installationStatus[mod.title]}
+								disabled={$installationStatus[mod.title] ||
+									$loadingStates[mod.title]}
+								onclick={() => installMod(mod)}
+							>
+								{#if $loadingStates[mod.title]}
+									<div class="spinner"></div>
+								{:else}
+									<Download size={18} />
+									{$installationStatus[mod.title]
+										? "Installed"
+										: "Download"}
+								{/if}
+							</button>
+							{#if $installationStatus[mod.title]}
+								<button
+									class="delete-button"
+									title="Remove Mod"
+									onclick={() => uninstallMod(mod)}
+								>
+									<Trash2 size={18} />
+								</button>
+							{/if}
 						</div>
 					</div>
-					<div class="mod-info">
-						<h3>{mod.title}</h3>
-						<p>{truncateText(stripMarkdown(mod.description))}</p>
-					</div>
-					<div class="button-container">
-						<button
-							class="download-button"
-							class:installed={$installationStatus[mod.title]}
-							disabled={$installationStatus[mod.title] ||
-								$loadingStates[mod.title]}
-							onclick={() => installMod(mod)}
-						>
-							{#if $loadingStates[mod.title]}
-								<div class="spinner"></div>
-							{:else}
-								<Download size={18} />
-								{$installationStatus[mod.title]
-									? "Installed"
-									: "Download"}
-							{/if}
-						</button>
-						{#if $installationStatus[mod.title]}
-							<button
-								class="delete-button"
-								title="Remove Mod"
-								onclick={() => uninstallMod(mod)}
-							>
-								<Trash2 size={18} />
-							</button>
-						{/if}
-					</div>
-				</div>
-			{/each}
-		{/if}
+				{/each}
+			{/if}
+		</div>
 	</div>
 </div>
 
 <style>
 	.search-container {
 		position: relative;
-		width: 75%;
-		padding: 1rem;
+		width: 80%;
+		padding: 0 1rem;
 	}
 
 	::selection {
@@ -343,16 +344,21 @@
 	}
 
 	.search-bar {
-		margin-bottom: 2rem;
+		height: 3rem;
+		width: 100%;
+		position: absolute;
+		top: 1rem;
+		z-index: 100;
 	}
 
 	.search-bar form {
 		display: flex;
 		gap: 0.5rem;
+		width: 100%;
 	}
 
 	.search-input {
-		flex: 1;
+		width: 90%;
 		padding: 0.75rem;
 		border: 2px solid #f4eee0;
 		border-radius: 6px;
@@ -392,6 +398,13 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 1rem;
+		padding: 1rem 0;
+		padding-top: 5rem;
+	}
+
+	.results-scroll-container {
+		overflow-y: auto;
+		height: 100%;
 	}
 
 	.mod-card {
@@ -563,5 +576,11 @@
 	.download-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
+	}
+
+	@media (max-width: 1160px) {
+		.results-container {
+			padding: 1rem;
+		}
 	}
 </style>

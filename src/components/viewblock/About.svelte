@@ -20,63 +20,65 @@
 	};
 </script>
 
-<div class="about-container">
-	<div class="content">
-		<h2>About Balatro Mod Manager</h2>
-
-		<div>
-			<h3>What is BMM?</h3>
-			<p>
-				Balatro Mod Manager (BMM) is a tool designed to help you manage
-				and install mods for the game Balatro. It provides an
-				easy-to-use interface for mod management while maintaining the
-				game's unique aesthetic.
-			</p>
+<div class="container default-scrollbar">
+	<div class="about-container">
+		<div class="content">
+			<h2>About Balatro Mod Manager</h2>
+	
+			<div>
+				<h3>What is BMM?</h3>
+				<p>
+					Balatro Mod Manager (BMM) is a tool designed to help you manage
+					and install mods for the game Balatro. It provides an
+					easy-to-use interface for mod management while maintaining the
+					game's unique aesthetic.
+				</p>
+			</div>
+	
+			<div>
+				<h3>Features</h3>
+				<ul>
+					<li>Easy mod installation and management</li>
+					<li>Automatic game path detection</li>
+					<li>Mod compatibility checking</li>
+					<li>Clean, pixel-perfect interface</li>
+				</ul>
+			</div>
+	
+			<div class="button-container">
+				<button
+					class="wiki-button"
+					on:click={() =>
+						open("https://balatromods.miraheze.org/wiki/Main_Page")}
+				>
+					<BookOpen size={20} />
+					<span>Visit Wiki</span>
+				</button>
+				<button class="kofi-button" on:click={handleKofiClick}>
+					<div class="confetti-container">
+						{#if showConfetti}
+							<Confetti
+								x={[0, 1]}
+								y={[0, 1]}
+								duration={4000}
+								amount={50}
+							/>
+						{/if}
+					</div>
+					<Coffee size={20} />
+					<span>Support on Ko-fi</span>
+				</button>
+			</div>
+	
+			<p id="versiontext">Current version: v0.1.6</p>
 		</div>
-
-		<div>
-			<h3>Features</h3>
-			<ul>
-				<li>Easy mod installation and management</li>
-				<li>Automatic game path detection</li>
-				<li>Mod compatibility checking</li>
-				<li>Clean, pixel-perfect interface</li>
-			</ul>
+	
+		<div class="profile-section">
+			<div class="profile">
+				<img src="/images/pb.jpg" alt="" />
+			</div>
+			<span class="profile-title">Efe/Skyline - The Creator of BMM</span>
 		</div>
-
-		<div class="button-container">
-			<button
-				class="wiki-button"
-				on:click={() =>
-					open("https://balatromods.miraheze.org/wiki/Main_Page")}
-			>
-				<BookOpen size={20} />
-				<span>Visit Wiki</span>
-			</button>
-			<button class="kofi-button" on:click={handleKofiClick}>
-				<div class="confetti-container">
-					{#if showConfetti}
-						<Confetti
-							x={[0, 1]}
-							y={[0, 1]}
-							duration={4000}
-							amount={50}
-						/>
-					{/if}
-				</div>
-				<Coffee size={20} />
-				<span>Support on Ko-fi</span>
-			</button>
-		</div>
-
-		<p id="versiontext">Current version: v0.1.6</p>
-	</div>
-
-	<div class="profile-section">
-		<div class="profile">
-			<img src="/images/pb.jpg" alt="" />
-		</div>
-		<span class="profile-title">Efe/Skyline - The Creator of BMM</span>
 	</div>
 </div>
 
@@ -86,6 +88,9 @@
 		justify-content: space-between;
 		gap: 2rem;
 		align-items: center;
+
+		padding: 0rem 2rem;
+
 		&::-webkit-scrollbar {
 			width: 10px;
 		}

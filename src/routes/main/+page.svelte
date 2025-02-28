@@ -91,22 +91,22 @@
 		handleRefresh();
 	});
 
-	$effect(() => {
-		if ($currentModView) {
-			// Scroll both window and content container to top
-			window.scrollTo({ top: 0, behavior: "instant" });
-			if (contentElement) {
-				contentElement.scrollTop = 0;
-			}
-			// Lock scrolling at multiple levels
-			document.body.style.overflow = "hidden";
-			document.documentElement.style.overflow = "hidden";
-		} else {
-			// Restore scrolling
-			document.body.style.overflow = "auto";
-			document.documentElement.style.overflow = "auto";
-		}
-	});
+	// $effect(() => {
+	// 	if ($currentModView) {
+	// 		// Scroll both window and content container to top
+	// 		window.scrollTo({ top: 0, behavior: "instant" });
+	// 		if (contentElement) {
+	// 			contentElement.scrollTop = 0;
+	// 		}
+	// 		// Lock scrolling at multiple levels
+	// 		document.body.style.overflow = "hidden";
+	// 		document.documentElement.style.overflow = "hidden";
+	// 	} else {
+	// 		// Restore scrolling
+	// 		document.body.style.overflow = "auto";
+	// 		document.documentElement.style.overflow = "auto";
+	// 	}
+	// });
 </script>
 
 {#if $backgroundEnabled}
@@ -242,40 +242,17 @@
 		background: rgba(193, 65, 57, 0.8);
 		border-radius: 5px;
 		backdrop-filter: blur(10px);
-		padding: 2rem;
 		margin-bottom: 2rem;
 		outline: 2px solid #f4eee0;
-		overflow-y: auto; /* Enable vertical scrolling */
+		/* overflow-y: auto; Enable vertical scrolling */
+		overflow: hidden;
 		max-height: calc(100vh - 12rem);
 		min-height: 0;
-
-		&::-webkit-scrollbar {
-			width: 10px;
-		}
-
-		&::-webkit-scrollbar-track {
-			background: transparent;
-			border-radius: 15px;
-		}
-
-		&::-webkit-scrollbar-thumb {
-			background: #f4eee0;
-			border: 2px solid rgba(193, 65, 57, 0.8);
-			border-radius: 15px;
-		}
-
-		&::-webkit-scrollbar:horizontal {
-			display: none;
-		}
-
-		&::-webkit-scrollbar-corner {
-			background-color: transparent;
-		}
 	}
 
 	.content.modal-open {
 		overflow: hidden !important;
-		scrollbar-gutter: stable;
+		/* scrollbar-gutter: stable; */
 	}
 
 	/* Add scrollbar width variable for consistency */
@@ -284,7 +261,8 @@
 	}
 
 	.content.modal-open {
-		padding-right: var(--scrollbar-width);
+		/* padding-right: var(--scrollbar-width); */
+		padding-right: 0;
 	}
 
 	.version-text {

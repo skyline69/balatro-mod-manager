@@ -667,170 +667,178 @@
 	// }
 </script>
 
-<div class="mods-container">
-	<div class="categories">
-		{#each categories as category}
-			<button
-				class:active={$currentCategory === category.name}
-				onclick={() => handleCategoryClick(category.name)}
-			>
-				<svelte:component this={category.icon} size={16} />
-				{category.name}
-			</button>
-		{/each}
-	</div>
-
-	<div class="separator"></div>
-
-	{#if isLoading}
-		<div class="loading-container">
-			<p class="loading-text">Loading mods{".".repeat($loadingDots)}</p>
-		</div>
-	{:else if showSearch}
-		<SearchView onCheckDependencies={handleDependencyCheck} />
-	{:else}
-		<div class="mods-wrapper">
-			<div class="controls-container">
-				<div
-					class="pagination-controls"
-					in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+<div class="container default-scrollbar">
+	<div class="mods-container">
+		<div class="categories">
+			{#each categories as category}
+				<button
+					class:active={$currentCategory === category.name}
+					onclick={() => handleCategoryClick(category.name)}
 				>
-					<button
-						onclick={previousPage}
-						disabled={$currentPage === 1}
-					>
-						Previous
-					</button>
-
-					{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
-						{#if startPage + i <= totalPages}
-							<button
-								class:active={$currentPage === startPage + i}
-								onclick={() => goToPage(startPage + i)}
-							>
-								{startPage + i}
-							</button>
-						{/if}
-					{/each}
-					<button
-						onclick={nextPage}
-						disabled={$currentPage === totalPages}
-					>
-						Next
-					</button>
-				</div>
-				<div class="sort-controls">
-					<div class="sort-wrapper">
-						<ArrowUpDown size={16} />
-						<select
-							value={$currentSort}
-							onchange={handleSortChange}
-						>
-							<option value={SortOption.NameAsc}
-								>Name (A-Z)</option
-							>
-							<option value={SortOption.NameDesc}
-								>Name (Z-A)</option
-							>
-							<!-- <option value={SortOption.LastUpdatedDesc} -->
-							<!-- 	>Latest Updated</option -->
-							<!-- > -->
-							<!-- <option value={SortOption.LastUpdatedAsc} -->
-							<!-- 	>Oldest Updated</option -->
-							<!-- > -->
-						</select>
-					</div>
-				</div>
+					<svelte:component this={category.icon} size={16} />
+					{category.name}
+				</button>
+			{/each}
+		</div>
+	
+		<div class="separator"></div>
+	
+		{#if isLoading}
+			<div class="loading-container">
+				<p class="loading-text">Loading mods{".".repeat($loadingDots)}</p>
 			</div>
-			<div class="mods-grid">
-				{#each paginatedMods as mod}
-					<div
-						class="mod-card"
-						style="--orig-color1: {mod.colors
-							.color1}; --orig-color2: {mod.colors.color2};"
-						onclick={() => handleModClick(mod)}
-						onkeydown={(e) =>
-							e.key === "Enter" && handleModClick(mod)}
-						role="button"
-						tabindex="0"
+		{:else if showSearch}
+			<SearchView onCheckDependencies={handleDependencyCheck} />
+		{:else}
+			<div class="mods-wrapper">
+				<div class="controls-container">
+					<div 
+						class="pagination-controls"
+						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
 					>
-						<div class="mod-image">
-							<img
-								src={mod.image}
-								alt={mod.title}
-								draggable="false"
-								onerror={async (e) => {
-									const img =
-										e.currentTarget as HTMLImageElement;
-									img.src = "images/cover.jpg";
-									img.onerror = null;
-								}}
-							/>
-							<!-- <div class="tags"> -->
-							<!-- 	<span class="tag updated"> -->
-							<!-- 		<Clock size={13} /> -->
-							<!-- 		{mod.lastUpdated} -->
-							<!-- 	</span> -->
-							<!-- </div> -->
-						</div>
-						<div class="mod-info">
-							<h3>{mod.title}</h3>
-							<p>
-								{truncateText(stripMarkdown(mod.description))}
-							</p>
-						</div>
-						<div class="button-container">
-							<button
-								class="download-button"
-								class:installed={$installationStatus[mod.title]}
-								disabled={$installationStatus[mod.title] ||
-									$loadingStates[mod.title]}
-								onclick={(e) => {
-									e.stopPropagation();
-									installMod(mod);
-								}}
-							>
-								{#if $loadingStates[mod.title]}
-									<div class="spinner"></div>
-								{:else}
-									<Download size={16} />
-									{$installationStatus[mod.title]
-										? "Installed"
-										: "Download"}
-								{/if}
-							</button>
-
-							{#if $installationStatus[mod.title]}
+						<button
+							onclick={previousPage}
+							disabled={$currentPage === 1}
+						>
+							Previous
+						</button>
+	
+						{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
+							{#if startPage + i <= totalPages}
 								<button
-									class="delete-button"
-									onclick={(e) => {
-										e.stopPropagation();
-										uninstallMod(mod);
-									}}
+									class:active={$currentPage === startPage + i}
+									onclick={() => goToPage(startPage + i)}
 								>
-									<Trash2 size={16} />
+									{startPage + i}
 								</button>
 							{/if}
+						{/each}
+						<button
+							onclick={nextPage}
+							disabled={$currentPage === totalPages}
+						>
+							Next
+						</button>
+					</div>
+					<div class="sort-controls" in:fly={{ duration: 400, y: 10, opacity: 0.2 }}>
+						<div class="sort-wrapper">
+							<ArrowUpDown size={16} />
+							<select
+								value={$currentSort}
+								onchange={handleSortChange}
+							>
+								<option value={SortOption.NameAsc}
+									>Name (A-Z)</option
+								>
+								<option value={SortOption.NameDesc}
+									>Name (Z-A)</option
+								>
+								<!-- <option value={SortOption.LastUpdatedDesc} -->
+								<!-- 	>Latest Updated</option -->
+								<!-- > -->
+								<!-- <option value={SortOption.LastUpdatedAsc} -->
+								<!-- 	>Oldest Updated</option -->
+								<!-- > -->
+							</select>
 						</div>
 					</div>
-				{/each}
+				</div>
+				<div class="mods-scroll-container default-scrollbar">
+					<div class="mods-grid">
+						{#each paginatedMods as mod}
+							<div
+								class="mod-card"
+								style="--orig-color1: {mod.colors
+									.color1}; --orig-color2: {mod.colors.color2};"
+								onclick={() => handleModClick(mod)}
+								onkeydown={(e) =>
+									e.key === "Enter" && handleModClick(mod)}
+								role="button"
+								tabindex="0"
+							>
+								<div class="mod-image">
+									<img
+										src={mod.image}
+										alt={mod.title}
+										draggable="false"
+										onerror={async (e) => {
+											const img =
+												e.currentTarget as HTMLImageElement;
+											img.src = "images/cover.jpg";
+											img.onerror = null;
+										}}
+									/>
+									<!-- <div class="tags"> -->
+									<!-- 	<span class="tag updated"> -->
+									<!-- 		<Clock size={13} /> -->
+									<!-- 		{mod.lastUpdated} -->
+									<!-- 	</span> -->
+									<!-- </div> -->
+								</div>
+								<div class="mod-info">
+									<h3>{mod.title}</h3>
+									<p>
+										<!-- truncate function is left here just in case -->
+										{truncateText(stripMarkdown(mod.description))}
+									</p>
+								</div>
+								<div class="button-container">
+									<button
+										class="download-button"
+										class:installed={$installationStatus[mod.title]}
+										disabled={$installationStatus[mod.title] ||
+											$loadingStates[mod.title]}
+										onclick={(e) => {
+											e.stopPropagation();
+											installMod(mod);
+										}}
+									>
+										{#if $loadingStates[mod.title]}
+											<div class="spinner"></div>
+										{:else}
+											<Download size={16} />
+											{$installationStatus[mod.title]
+												? "Installed"
+												: "Download"}
+										{/if}
+									</button>
+		
+									{#if $installationStatus[mod.title]}
+										<button
+											class="delete-button"
+											onclick={(e) => {
+												e.stopPropagation();
+												uninstallMod(mod);
+											}}
+										>
+											<Trash2 size={16} />
+										</button>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
 			</div>
-		</div>
+		{/if}
+	</div>
+	
+	{#if $currentModView}
+		<ModView
+			mod={$currentModView!}
+			onCheckDependencies={handleDependencyCheck}
+		/>
 	{/if}
 </div>
-
-{#if $currentModView}
-	<ModView
-		mod={$currentModView!}
-		onCheckDependencies={handleDependencyCheck}
-	/>
-{/if}
 
 <style>
 	.mods-container {
 		display: flex;
 		gap: 1rem;
-		height: 95%;
+		padding: 0 2rem;
+		overflow: hidden;
+
+		height: 100%;
 	}
 
 	.mod-info > p {
@@ -839,6 +847,7 @@
 		overflow: hidden;
 		display: -webkit-box;
 		-webkit-box-orient: vertical;
+		padding: 0 0.1rem;
 	}
 
 	.separator {
@@ -849,7 +858,7 @@
 
 	.pagination-controls {
 		position: absolute;
-		top: 0.05rem;
+		/* top: 0.05rem; */
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 1000;
@@ -890,12 +899,13 @@
 	}
 
 	.controls-container {
+		height: 75px;
+		width: 100%;
 		display: flex;
+		position: absolute;
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1rem;
-		padding-bottom: 1rem;
-		padding: 0 1rem;
 	}
 
 	.categories {
@@ -904,6 +914,7 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		overflow-y: auto;
+		padding: 2rem 0;
 
 		&::-webkit-scrollbar {
 			width: 10px;
@@ -957,37 +968,18 @@
 		color: #393646;
 	}
 
+	.mods-scroll-container {
+		overflow-y: auto;
+		height: 100%;
+	}
+	
 	.mods-grid {
-		height: 95%;
+		padding: 2rem;
+		padding-top: 5rem;
 		flex: 1;
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 30px;
-		overflow-y: auto;
-
-		&::-webkit-scrollbar {
-			width: 10px;
-		}
-
-		&::-webkit-scrollbar-track {
-			background: transparent;
-			border-radius: 15px;
-		}
-
-		&::-webkit-scrollbar-thumb {
-			background: #f4eee0;
-			border: 2px solid rgba(193, 65, 57, 0.8);
-			border-radius: 15px;
-		}
-		&::-webkit-scrollbar:horizontal {
-			display: none;
-		}
-		&::-webkit-scrollbar-corner {
-			background-color: transparent;
-		}
-
-		/* scrollbar-width: 0; */
-		/* scrollbar-color: transparent transparent; */
 	}
 
 	.mod-card {
@@ -1020,8 +1012,8 @@
 
 	.sort-controls {
 		position: absolute;
-		top: 0.25rem; /* Increased from 2rem */
-		right: 1rem; /* Increased from 2.5rem */
+		/* top: 0.25rem; Increased from 2rem */
+		right: 4rem; /* Increased from 2.5rem */
 		z-index: 1000;
 		margin: 0;
 		background: transparent;
@@ -1273,19 +1265,15 @@
 		}
 
 		.pagination-controls {
-			top: 0.25rem;
-			left: 35%;
+			left: 13.6rem;
 		}
 
 		.controls-container {
 			margin-bottom: 0.5rem;
 		}
 
-		.mods-container {
-			height: 100%;
-		}
-		.mods-grid {
-			padding: 0;
+		.sort-controls {
+			right: 1rem;
 		}
 	}
 </style>
