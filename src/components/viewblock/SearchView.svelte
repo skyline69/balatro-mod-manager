@@ -275,10 +275,12 @@
 					<div
 						class="mod-card"
 						onclick={() => handleModClick(mod)}
-						onkeydown={(e) => e.key === "Enter" && handleModClick(mod)}
+						onkeydown={(e) =>
+							e.key === "Enter" && handleModClick(mod)}
 						role="button"
 						tabindex="0"
-						style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod.colors.color2};"
+						style="--orig-color1: {mod.colors
+							.color1}; --orig-color2: {mod.colors.color2};"
 					>
 						<div class="mod-image">
 							<img
@@ -295,7 +297,9 @@
 						</div>
 						<div class="mod-info">
 							<h3>{mod.title}</h3>
-							<p>{truncateText(stripMarkdown(mod.description))}</p>
+							<p>
+								{truncateText(stripMarkdown(mod.description))}
+							</p>
 						</div>
 						<div class="button-container">
 							<button
@@ -481,6 +485,7 @@
 		overflow: hidden;
 		display: -webkit-box;
 		-webkit-box-orient: vertical;
+		padding: 0 0.1rem;
 	}
 
 	.mod-info h3 {
