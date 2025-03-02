@@ -28,3 +28,35 @@
     height: 100%;
     overflow-y: auto;
 }
+
+.spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid #f4eee0;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* #region Animations */
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* #endregion */
+
+/* #region Fonts */
+
+@font-face {
+    font-family: "M6X11";
+    src: url("/fonts/m6x11plus.ttf") format("truetype");
+    font-display: swap;
+}
+
+/* #endregion */

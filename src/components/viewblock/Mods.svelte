@@ -8,7 +8,6 @@
 		Gamepad2,
 		LayoutDashboard,
 		FolderHeart,
-		Trash2,
 		Search,
 		BookOpen,
 	} from "lucide-svelte";
@@ -36,12 +35,12 @@
 	import type { InstalledMod } from "../../stores/modStore";
 	import { open } from "@tauri-apps/plugin-shell";
 	import { invoke } from "@tauri-apps/api/core";
-	import { stripMarkdown, truncateText } from "../../utils/helpers";
 	import SearchView from "./SearchView.svelte";
 	import { onMount } from "svelte";
 	import { writable } from "svelte/store";
 	import { addMessage } from "$lib/stores";
 	import { currentPage, itemsPerPage } from "../../stores/modStore";
+	import ModCard from "./ModCard.svelte";
 
 	const loadingDots = writable(0);
 
@@ -61,7 +60,6 @@
 
 	// let mods: Mod[] = [];
 	let isLoading = true;
-
 	interface DependencyCheck {
 		steamodded: boolean;
 		talisman: boolean;
@@ -746,76 +744,7 @@
 				<div class="mods-scroll-container default-scrollbar">
 					<div class="mods-grid">
 						{#each paginatedMods as mod}
-							<div
-								class="mod-card"
-								style="--orig-color1: {mod.colors
-									.color1}; --orig-color2: {mod.colors.color2};"
-								onclick={() => handleModClick(mod)}
-								onkeydown={(e) =>
-									e.key === "Enter" && handleModClick(mod)}
-								role="button"
-								tabindex="0"
-							>
-								<div class="mod-image">
-									<img
-										src={mod.image}
-										alt={mod.title}
-										draggable="false"
-										onerror={async (e) => {
-											const img =
-												e.currentTarget as HTMLImageElement;
-											img.src = "images/cover.jpg";
-											img.onerror = null;
-										}}
-									/>
-									<!-- <div class="tags"> -->
-									<!-- 	<span class="tag updated"> -->
-									<!-- 		<Clock size={13} /> -->
-									<!-- 		{mod.lastUpdated} -->
-									<!-- 	</span> -->
-									<!-- </div> -->
-								</div>
-								<div class="mod-info">
-									<h3>{mod.title}</h3>
-									<p>
-										<!-- truncate function is left here just in case -->
-										{truncateText(stripMarkdown(mod.description))}
-									</p>
-								</div>
-								<div class="button-container">
-									<button
-										class="download-button"
-										class:installed={$installationStatus[mod.title]}
-										disabled={$installationStatus[mod.title] ||
-											$loadingStates[mod.title]}
-										onclick={(e) => {
-											e.stopPropagation();
-											installMod(mod);
-										}}
-									>
-										{#if $loadingStates[mod.title]}
-											<div class="spinner"></div>
-										{:else}
-											<Download size={16} />
-											{$installationStatus[mod.title]
-												? "Installed"
-												: "Download"}
-										{/if}
-									</button>
-		
-									{#if $installationStatus[mod.title]}
-										<button
-											class="delete-button"
-											onclick={(e) => {
-												e.stopPropagation();
-												uninstallMod(mod);
-											}}
-										>
-											<Trash2 size={16} />
-										</button>
-									{/if}
-								</div>
-							</div>
+							<ModCard {mod} onmodclick={handleModClick} oninstallclick={installMod} onuninstallclick={uninstallMod} />
 						{/each}
 					</div>
 				</div>
@@ -839,15 +768,6 @@
 		overflow: hidden;
 
 		height: 100%;
-	}
-
-	.mod-info > p {
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		overflow: hidden;
-		display: -webkit-box;
-		-webkit-box-orient: vertical;
-		padding: 0 0.1rem;
 	}
 
 	.separator {
@@ -982,33 +902,6 @@
 		gap: 30px;
 	}
 
-	.mod-card {
-		--bg-color: var(--orig-color1, #4f6367);
-		--bg-color-2: var(--orig-color2, #334461);
-
-		display: flex;
-		flex-direction: column;
-		position: relative;
-		border-radius: 8px;
-		overflow: hidden;
-		border: 2px solid #f4eee0;
-		width: 300px;
-		height: 330px;
-		margin: 0 auto;
-		padding: 1rem;
-		box-sizing: border-box;
-		cursor: pointer;
-		background-size: 100% 200%;
-		transition: all 0.3s ease;
-		/* Remove the duplicate background property and keep only this one */
-		background-image: repeating-linear-gradient(
-			-45deg,
-			var(--bg-color),
-			var(--bg-color) 10px,
-			var(--bg-color-2) 10px,
-			var(--bg-color-2) 20px
-		);
-	}
 
 	.sort-controls {
 		position: absolute;
@@ -1043,9 +936,10 @@
 	}
 
 	.mods-wrapper {
-		flex: 1;
 		position: relative;
-		overflow: hidden;
+		/* 192px being the width of the catagories + seperator */
+		width: calc(100% - 192px);
+		padding: 0 1rem;
 	}
 
 	.sort-wrapper :global(svg) {
@@ -1090,134 +984,7 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
-	.mod-card:hover {
-		animation: stripe-slide-up 1s linear infinite;
-		scale: 1.05;
-	}
 
-	@keyframes stripe-slide-up {
-		0% {
-			background-position: 0 0;
-		}
-		100% {
-			background-position: 0 -20px;
-		}
-	}
-
-	.mod-image {
-		position: relative;
-		height: 150px;
-	}
-
-	.mod-image img {
-		width: 100%;
-		height: 100%;
-		border-radius: 5px;
-		object-fit: cover;
-		font-family: "object-fit: cover;"; /* IE fallback */
-		background: #2a2a2a; /* Fallback background */
-		border: 2px solid #f4eee0;
-	}
-
-	.download-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: calc(100% - 2rem); /* Account for parent padding */
-		padding: 0.75rem;
-		background: #56a786;
-		color: #f4eee0;
-		border: none;
-		outline: #459373 solid 2px;
-
-		border-radius: 4px;
-		font-family: "M6X11", sans-serif;
-		font-size: 1rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		position: absolute;
-		bottom: 1rem;
-		left: 1rem;
-
-		&.installed {
-			background: #808080;
-			outline-color: #666666;
-			cursor: not-allowed;
-		}
-
-		&.installed:hover {
-			background: #808080;
-			transform: none;
-		}
-	}
-
-	.download-button:hover {
-		background: #74cca8;
-		transform: translateY(-2px);
-	}
-
-	.download-button:active {
-		transform: translateY(0);
-	}
-
-	.mod-info {
-		flex: 1;
-		padding: 0.5rem;
-		position: relative;
-		bottom: 1rem;
-	}
-
-	.mod-info h3 {
-		color: #fdcf51;
-		font-size: 1.5rem;
-		margin-bottom: 0.2rem;
-	}
-
-	.mod-info p {
-		color: #f4eee0;
-		font-size: 1rem;
-		line-height: 1.2;
-	}
-
-	.button-container {
-		display: flex;
-		gap: 0.5rem;
-		position: absolute;
-		bottom: 1rem;
-		left: 1rem;
-		width: calc(100% - 2rem);
-	}
-
-	.download-button {
-		flex: 1;
-		position: static;
-		bottom: auto;
-		left: auto;
-	}
-
-	.delete-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.75rem;
-		background: #c14139;
-		color: #f4eee0;
-		border: none;
-		outline: #a13029 solid 2px;
-		border-radius: 4px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.delete-button:hover {
-		background: #d4524a;
-		transform: translateY(-2px);
-	}
-
-	.delete-button:active {
-		transform: translateY(0);
-	}
 
 	.loading-container {
 		display: flex;
@@ -1232,29 +999,6 @@
 		font-family: "M6X11", sans-serif;
 		font-size: 1.5rem;
 		min-width: 150px;
-	}
-
-	.spinner {
-		width: 13px;
-		height: 13px;
-		border: 2px solid #f4eee0;
-		border-bottom-color: transparent;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.download-button:disabled {
-		opacity: 0.8;
-		cursor: not-allowed;
 	}
 
 	@media (max-width: 1160px) {

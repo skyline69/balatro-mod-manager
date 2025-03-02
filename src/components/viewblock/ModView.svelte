@@ -823,24 +823,6 @@
 			position: relative;
 		}
 	}
-	.spinner {
-		width: 18px;
-		height: 18px;
-		border: 2px solid #f4eee0;
-		border-bottom-color: transparent;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		margin: 0 auto;
-	}
-
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
-	}
 
 	.download-button:disabled {
 		opacity: 0.8;
