@@ -64,7 +64,7 @@ struct ReleaseAsset {
 }
 pub struct ModInstaller {
     client: reqwest::Client,
-    mod_type: ModType,
+    pub mod_type: ModType,
 }
 
 impl ModInstaller {
@@ -107,6 +107,11 @@ impl ModInstaller {
         // dbg!(&mod_path);
 
         Ok(mod_path)
+    }
+
+    pub async fn get_latest_release(&self) -> Result<String> {
+        let versions = self.get_available_versions().await?;
+        Ok(versions[0].clone())
     }
 
     pub async fn get_available_versions(&self) -> Result<Vec<String>> {

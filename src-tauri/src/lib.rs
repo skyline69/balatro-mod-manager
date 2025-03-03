@@ -647,7 +647,15 @@ async fn reindex_mods(state: tauri::State<'_, AppState>) -> Result<(usize, usize
 #[tauri::command]
 async fn get_dependents(mod_name: String) -> Result<Vec<String>, String> {
     let db = Database::new().map_err(|e| e.to_string())?;
-    db.get_dependents(&mod_name).map_err(|e| e.to_string())
+    let all_dependents = db.get_dependents(&mod_name).map_err(|e| e.to_string())?;
+
+    // Filter out self-references
+    let filtered_dependents: Vec<String> = all_dependents
+        .into_iter()
+        .filter(|dep| dep != &mod_name)
+        .collect();
+
+    Ok(filtered_dependents)
 }
 
 #[tauri::command]
@@ -694,12 +702,19 @@ async fn remove_installed_mod(
     let is_framework = name.to_lowercase() == "steamodded" || name.to_lowercase() == "talisman";
 
     if is_framework {
-        let dependents = map_error(db.get_dependents(&name))?;
-        if !dependents.is_empty() {
+        let all_dependents = map_error(db.get_dependents(&name))?;
+
+        // Filter out self-references
+        let real_dependents: Vec<String> = all_dependents
+            .into_iter()
+            .filter(|dep| dep != &name)
+            .collect();
+
+        if !real_dependents.is_empty() {
             return Err(format!(
                 "Use cascade_uninstall to remove {} with {} dependents",
                 name,
-                dependents.len()
+                real_dependents.len()
             ));
         }
     }
@@ -763,6 +778,44 @@ async fn get_talisman_versions() -> Result<Vec<String>, String> {
         .get_available_versions()
         .await
         .map(|versions| versions.into_iter().map(|v| v.to_string()).collect())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_latest_steamodded_release() -> Result<String, String> {
+    // First try to get the version from cache
+    if let Ok(Some(versions)) = cache::load_versions_cache("steamodded") {
+        if !versions.is_empty() {
+            // We have cached versions, use the first one (most recent)
+            let version = &versions[0];
+            return Ok(format!(
+                "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
+                version
+            ));
+        }
+    }
+
+    // If cache miss or empty, fetch from network
+    let installer = ModInstaller::new(ModType::Steamodded);
+    installer
+        .get_latest_release()
+        .await
+        .map(|version| {
+            // Convert the version string to a proper GitHub download URL
+            match installer.mod_type {
+                ModType::Steamodded => {
+                    format!(
+                        "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
+                        version
+                    )
+                }
+                // Fallback for other types if needed
+                _ => format!(
+                    "https://github.com/Steamodded/smods/archive/refs/tags/{}.zip",
+                    version
+                ),
+            }
+        })
         .map_err(|e| e.to_string())
 }
 
@@ -921,7 +974,8 @@ pub fn run() {
             // get_mod_timestamps,
             get_mod_thumbnail,
             get_discord_rpc_status,
-            set_discord_rpc_status
+            set_discord_rpc_status,
+            get_latest_steamodded_release,
         ])
         .run(tauri::generate_context!());
 

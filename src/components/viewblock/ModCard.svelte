@@ -1,33 +1,73 @@
 <script lang="ts">
-    import type { Mod } from "../../stores/modStore";
-    import { Download, Trash2 } from "lucide-svelte";
+	import type { Mod } from "../../stores/modStore";
+	import { Download, Trash2 } from "lucide-svelte";
 	import {
 		installationStatus,
 		loadingStates2 as loadingStates,
 	} from "../../stores/modStore";
 	import { stripMarkdown, truncateText } from "../../utils/helpers";
+	import { invoke } from "@tauri-apps/api/core";
 
-    interface Props {
-        mod: Mod,
-        onmodclick?: (mod: Mod) => void,
-        oninstallclick?: (mod: Mod) => void,
-        onuninstallclick?: (mod: Mod) => void
-    }
+	interface Props {
+		mod: Mod;
+		onmodclick?: (mod: Mod) => void;
+		oninstallclick?: (mod: Mod) => void;
+		onuninstallclick?: (mod: Mod) => void;
+	}
 
-    let { mod, oninstallclick, onuninstallclick, onmodclick }: Props = $props();
+	let { mod, oninstallclick, onuninstallclick, onmodclick }: Props = $props();
 
 	function installMod(e: Event) {
 		e.stopPropagation();
-		if (oninstallclick) oninstallclick(mod)
+		if (mod.title.toLowerCase() === "steamodded") {
+			fetchAndInstallLatestSteamodded();
+		} else if (oninstallclick) {
+			oninstallclick(mod);
+		}
 	}
 
 	function uninstallMod(e: Event) {
 		e.stopPropagation();
-		if (onuninstallclick) onuninstallclick(mod)
+		if (onuninstallclick) onuninstallclick(mod);
 	}
 
 	function openModView() {
-		if (onmodclick) onmodclick(mod)
+		if (onmodclick) onmodclick(mod);
+	}
+
+	async function fetchAndInstallLatestSteamodded() {
+		try {
+			const latestReleaseURL = await invoke<string>(
+				"get_latest_steamodded_release",
+			);
+			await installModFromURL(latestReleaseURL);
+		} catch (error) {
+			console.error("Failed to get latest Steamodded release:", error);
+		}
+	}
+
+	async function installModFromURL(url: string) {
+		try {
+			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
+
+			if (!url.startsWith("http")) {
+				console.error("Invalid URL format:", url);
+				throw new Error(`Invalid URL format: ${url}`);
+			}
+
+			const installedPath = await invoke<string>("install_mod", { url });
+			await invoke("add_installed_mod", {
+				name: mod.title,
+				path: installedPath,
+				dependencies: ["Steamodded"],
+			});
+
+			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+		} catch (error) {
+			console.error("Failed to install mod:", error);
+		} finally {
+			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
+		}
 	}
 
 	/* Later, for CSS
@@ -43,112 +83,105 @@
 			color: #f4eee0;
 		}
 	*/
-
 </script>
 
 <div
-    class="mod-card"
-    onclick={openModView}
-    onkeydown={(e) => e.key === "Enter" && openModView()}
-    role="button"
-    tabindex="0"
-    style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod.colors.color2};"
+	class="mod-card"
+	onclick={openModView}
+	onkeydown={(e) => e.key === "Enter" && openModView()}
+	role="button"
+	tabindex="0"
+	style="--orig-color1: {mod.colors.color1}; --orig-color2: {mod.colors
+		.color2};"
 >
-    <div class="mod-image">
-        <img
-            src={mod.image}
-            alt={mod.title}
-            draggable="false"
-        />
+	<div class="mod-image">
+		<img src={mod.image} alt={mod.title} draggable="false" />
 
-        <div class="tags">
-            <!-- <span class="tag updated"> -->
-            <!-- 	<Clock size={13} /> -->
-            <!-- 	{mod.lastUpdated} -->
-            <!-- </span> -->
-        </div>
-    </div>
+		<div class="tags">
+			<!-- <span class="tag updated"> -->
+			<!-- 	<Clock size={13} /> -->
+			<!-- 	{mod.lastUpdated} -->
+			<!-- </span> -->
+		</div>
+	</div>
 
-    <div class="mod-info">
-        <h3>{mod.title}</h3>
-        <p>{truncateText(stripMarkdown(mod.description))}</p>
-    </div>
+	<div class="mod-info">
+		<h3>{mod.title}</h3>
+		<p>{truncateText(stripMarkdown(mod.description))}</p>
+	</div>
 
-    <div class="button-container">
-        <button
-            class="download-button"
-            class:installed={$installationStatus[mod.title]}
-            disabled={$installationStatus[mod.title] ||
-                $loadingStates[mod.title]}
-            onclick={installMod}
-        >
-            {#if $loadingStates[mod.title]}
-                <div class="spinner"></div>
-            {:else}
-                <Download size={18} />
-                {$installationStatus[mod.title]
-                    ? "Installed"
-                    : "Download"}
-            {/if}
-        </button>
-		
-        {#if $installationStatus[mod.title]}
-            <button
-                class="delete-button"
-                title="Remove Mod"
-                onclick={uninstallMod}
-            >
-                <Trash2 size={18} />
-            </button>
-        {/if}
-    </div>
+	<div class="button-container">
+		<button
+			class="download-button"
+			class:installed={$installationStatus[mod.title]}
+			disabled={$installationStatus[mod.title] ||
+				$loadingStates[mod.title]}
+			onclick={installMod}
+		>
+			{#if $loadingStates[mod.title]}
+				<div class="spinner"></div>
+			{:else}
+				<Download size={18} />
+				{$installationStatus[mod.title] ? "Installed" : "Download"}
+			{/if}
+		</button>
+
+		{#if $installationStatus[mod.title]}
+			<button
+				class="delete-button"
+				title="Remove Mod"
+				onclick={uninstallMod}
+			>
+				<Trash2 size={18} />
+			</button>
+		{/if}
+	</div>
 </div>
 
 <style>
+	.mod-card {
+		--bg-color: var(--orig-color1, #4f6367);
+		--bg-color-2: var(--orig-color2, #334461);
 
-    .mod-card {
-        --bg-color: var(--orig-color1, #4f6367);
-        --bg-color-2: var(--orig-color2, #334461);
+		display: flex;
+		flex-direction: column;
+		position: relative;
+		border-radius: 8px;
+		overflow: hidden;
+		border: 2px solid #f4eee0;
+		width: 300px;
+		max-width: 300px;
+		height: 330px;
+		margin: 0 auto;
+		padding: 1rem;
+		box-sizing: border-box;
+		cursor: pointer;
+		background-size: 100% 200%;
+		transition: all 0.3s ease;
+		background-image: repeating-linear-gradient(
+			-45deg,
+			var(--bg-color),
+			var(--bg-color) 10px,
+			var(--bg-color-2) 10px,
+			var(--bg-color-2) 20px
+		);
+	}
 
-        display: flex;
-        flex-direction: column;
-        position: relative;
-        border-radius: 8px;
-        overflow: hidden;
-        border: 2px solid #f4eee0;
-        width: 300px;
-        max-width: 300px;
-        height: 330px;
-        margin: 0 auto;
-        padding: 1rem;
-        box-sizing: border-box;
-        cursor: pointer;
-        background-size: 100% 200%;
-        transition: all 0.3s ease;
-        background-image: repeating-linear-gradient(
-            -45deg,
-            var(--bg-color),
-            var(--bg-color) 10px,
-            var(--bg-color-2) 10px,
-            var(--bg-color-2) 20px
-        );
-    }
+	.mod-card:hover {
+		animation: stripe-slide-up 1.5s linear infinite;
+		scale: 1.05;
+	}
 
-    .mod-card:hover {
-        animation: stripe-slide-up 1.5s linear infinite;
-        scale: 1.05;
-    }
+	@keyframes stripe-slide-up {
+		0% {
+			background-position: 0 0;
+		}
+		100% {
+			background-position: 0 -55px;
+		}
+	}
 
-    @keyframes stripe-slide-up {
-        0% {
-            background-position: 0 0;
-        }
-        100% {
-            background-position: 0 -55px;
-        }
-    }
-
-    .mod-image {
+	.mod-image {
 		position: relative;
 		height: 150px;
 	}
@@ -252,7 +285,7 @@
 		transition: all 0.2s ease;
 	}
 
-    .download-button:disabled {
+	.download-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
 	}
@@ -262,5 +295,4 @@
 			width: 100%;
 		}
 	}
-
 </style>
