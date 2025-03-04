@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade } from "svelte/transition";
 	import { cubicOut } from "svelte/easing";
-	import { Download, Trash2, User, ArrowLeft, Github } from "lucide-svelte";
+	import { Download, Trash2, User, ArrowLeft, Github, X } from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { open } from "@tauri-apps/plugin-shell";
 	import {
@@ -18,18 +18,21 @@
 	import { untrack } from "svelte";
 
 	const VERSION_CACHE_DURATION = 60 * 60 * 1000;
-	const { mod, onCheckDependencies } = $props<{
+
+	interface Props {
 		mod: Mod;
 		onCheckDependencies?: (event: {
 			steamodded: boolean;
 			talisman: boolean;
 		}) => void;
-	}>();
+	}
+
+	const { mod, onCheckDependencies }: Props = $props();
 	const isDefaultCover = (imageUrl: string) => imageUrl.includes("cover.jpg");
 	function handleAuxClick(event: MouseEvent) {
 		if (event.button === 3) {
 			event.preventDefault();
-			handleClose();
+			handleBack();
 		}
 	}
 
@@ -44,12 +47,24 @@
 	let prevModTitle = "";
 	let hasCheckedInstallation = false;
 
-	const linkCache = new Map();
+	let modsArray: Mod[] = [];
+	modsStore.subscribe((m) => (modsArray = m));
 
-	function isInternalModLink(url: string): {
+	let skipHistoryUpdate = false
+	let description: HTMLDivElement
+	// Links gets pushed down the array as another gets added. The oldest link is the last one in the array.
+	let history: internalModLinkData[] = $state([]);
+
+	const linkCache = new Map<string, internalModLinkData>();
+
+	let modView: HTMLDivElement
+
+	interface internalModLinkData {
 		isMod: boolean;
 		modName: string;
-	} {
+	}
+
+	function isInternalModLink(url: string): internalModLinkData {
 		// Quickly check common non-mod paths first
 		if (!url || !url.includes("github.com")) {
 			return { isMod: false, modName: "" };
@@ -418,53 +433,78 @@
 		}
 	}
 
+	/**
+	 * Sets the current mod view by title
+	 * @param title
+	 * @returns success
+	 */
+	function setModViewByTitle(title: string): boolean {
+		const targetMod = modsArray.find(
+			(m) => m.title === title,
+		);
+
+		if (targetMod) {
+			currentModView.set(targetMod);
+			skipHistoryUpdate = true
+
+			modView.scrollTo(0,0)
+
+			return true
+		}
+
+		return false
+	}
+
+	$effect(() => {
+		if (skipHistoryUpdate) {
+			skipHistoryUpdate = false;
+			return
+		}
+
+		history = [{isMod: true, modName: mod.title}]
+	});	
+
 	async function processInternalModLinks() {
-		setTimeout(() => {
-			const descriptionElement = document.querySelector(".description");
-			if (!descriptionElement) return;
+		if (!description) return;
 
-			const links = descriptionElement.querySelectorAll("a");
+		const links = description.querySelectorAll("a");
 
-			// Process each link
-			for (const link of links) {
-				if (link.href.startsWith("http")) {
-					let result;
+		// Process each link
+		for (const link of links) {
+			if (link.href.startsWith("http")) {
+				let result: internalModLinkData;
 
-					if (linkCache.has(link.href)) {
-						result = linkCache.get(link.href);
-					} else {
-						// Use the TypeScript implementation instead of invoking Rust
-						const { isMod, modName } = isInternalModLink(link.href);
-						result = { is_mod: isMod, mod_name: modName };
-						linkCache.set(link.href, result);
-					}
+				if (linkCache.has(link.href)) {
+					result = linkCache.get(link.href)!;
+				} else {
+					// Use the TypeScript implementation instead of invoking Rust
+					const { isMod, modName } = isInternalModLink(link.href);
+					result = { isMod, modName };
+					linkCache.set(link.href, result);
+				}
 
-					if (result.is_mod) {
-						link.classList.add("internal-mod-link");
-						link.setAttribute("title", "Opens in Mod Manager");
-						link.setAttribute("data-internal-mod", result.mod_name);
+				if (result.isMod) {
+					link.classList.add("internal-mod-link");
+					// looks general better without this.
+					// link.setAttribute("title", "Open in Mod Manager");
+					link.setAttribute("data-internal-mod", result.modName);
 
-						// Add direct click handler to each internal link
-						link.onclick = (e) => {
-							e.preventDefault();
-							e.stopPropagation();
+					// Add direct click handler to each internal link
+					link.onclick = (e) => {
+						e.preventDefault();
+						e.stopPropagation();
 
-							let modsArray: Mod[] = [];
-							modsStore.subscribe((m) => (modsArray = m))();
+						history.unshift(result)
 
-							const targetMod = modsArray.find(
-								(m) => m.title === result.mod_name,
-							);
-							if (targetMod) {
-								currentModView.set(targetMod);
-							}
+						console.log("hist:", history)
 
-							return false;
-						};
-					}
+						setModViewByTitle(result.modName);
+
+						return false;
+					};
 				}
 			}
-		}, 0);
+		}
 	}
 
 	const isModInstalled = async (mod: Mod) => {
@@ -504,6 +544,18 @@
 		}
 	});
 
+	function handleBack() {
+		if (history.length <= 1) {
+			currentModView.set(null);
+			return
+		}
+
+		history.shift()
+
+		const modName = history[0].modName
+		setModViewByTitle(modName)
+	}
+	
 	function handleClose() {
 		currentModView.set(null);
 	}
@@ -586,7 +638,7 @@
 <svelte:window
 	on:keydown={(e) => {
 		if (e.key === "Backspace" || e.key === "Escape") {
-			handleClose();
+			handleBack();
 		}
 	}}
 />
@@ -594,11 +646,23 @@
 <div
 	class="mod-view default-scrollbar"
 	transition:fade={{ duration: 300, easing: cubicOut }}
+	bind:this={modView}
 >
-	<button class="back-button" onclick={handleClose}>
-		<ArrowLeft size={20} /> <span>Back</span>
-	</button>
 	<div class="mod-content">
+		<div class="header-container">
+			<div class="header">
+				<button class="back-button" onclick={handleBack}>
+					<ArrowLeft size={20} /> <span>Back</span>
+				</button>
+	
+				{#if history.length > 1}
+					<button transition:fade={{duration: 300, easing: cubicOut}} onclick={handleClose} class='close-button'>
+						<X size={20}/>
+					</button>
+				{/if}
+			</div>
+		</div>
+
 		<h2>{mod.title}</h2>
 		<div class="content-grid">
 			<div class="left-column">
@@ -709,6 +773,7 @@
 				<div
 					class="description"
 					role="button"
+					bind:this={description}
 					tabindex="0"
 					onclick={handleMarkdownClick}
 					onkeydown={(e) => {
@@ -744,7 +809,9 @@
 	}
 
 	.mod-content {
-		max-width: 1000px;
+		position: relative;
+
+		/* max-width: 1000px; */
 		padding: 3rem;
 		color: #f4eee0;
 		font-family: "M6X11", sans-serif;
@@ -939,10 +1006,22 @@
 		color: #79c0ff;
 	}
 
-	.back-button {
+	.header-container {
 		position: absolute;
-		top: 1rem;
-		left: 1rem;
+		top:0;
+		left:0;
+		height: 100%;
+		width: 100%;
+
+		z-index: 999;
+
+		pointer-events: none;
+	}
+
+	.back-button {
+		position: relative;
+		/* top: 1rem;
+		left: 1rem; */
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -955,11 +1034,68 @@
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
 		font-size: 1rem;
+		z-index: 100;
+
+		pointer-events: auto;
+
+		backdrop-filter: blur(20px) brightness(0.7);
+	}
+
+	.close-button {
+		position: relative;
+		/* top: 1rem;
+		right: 1rem; */
+
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.5rem;
+		border-radius: 6px;
+
+		background: rgba(244, 238, 224, 0.1);
+		border: none;
+		color: #f4eee0;
+
+		cursor: pointer;
+		transition: all 0.2s ease;
+
+		font-family: "M6X11", sans-serif;
+		font-size: 1rem;
+
+		z-index: 100;
+		pointer-events: auto;
+
+		backdrop-filter: blur(20px) brightness(0.7);
+	}
+
+	.close-button:hover {
+		scale: 1.10;
+		background: rgba(244, 238, 224, 0.2);
+	}
+
+	.close-button:active {
+		scale: 0.95;
+		background: rgba(218, 212, 201, 0.1);
 	}
 
 	.back-button:hover {
 		background: rgba(244, 238, 224, 0.2);
 		transform: translateX(-5px);
+	}
+
+	.header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+
+		box-sizing: border-box;
+		position: sticky;
+
+		top: 1rem;
+		width: 100%;
+		height: 2.5rem;
+
+		padding: 0 1rem;
 	}
 
 	.description :global(h1),
@@ -1007,9 +1143,9 @@
 	}
 
 	.description :global(a.internal-mod-link:hover::before) {
-		content: "Opens in Mod Manager";
+		content: "Open in Mod Manager";
 		position: absolute;
-		bottom: -25px;
+		bottom: -35px;
 		left: 0;
 		background: rgba(0, 0, 0, 0.8);
 		color: white;
@@ -1022,6 +1158,7 @@
 
 	.description :global(a:hover) {
 		text-decoration: underline;
+		z-index: 10;
 	}
 
 	.description :global(blockquote) {
@@ -1051,16 +1188,42 @@
 	/* 	cursor: pointer; */
 	/* } */
 
-	@media (max-width: 1160px) {
+	@media (max-width: 1360px) {
 		.content-grid {
 			grid-template-columns: 1fr;
 		}
 		.image-container {
 			width: 100%;
+			height: 350px;
+
+			& > img {
+				height: 100%;
+			}
 		}
+
+		.image-button {
+			height: 100%;
+
+			& > img {
+				height: 100%;
+			}
+		}
+
 		.right-column {
 			bottom: 2rem;
 			position: relative;
+		}
+
+		.mod-content {
+			width: 100%;
+			max-width: 100%;
+			box-sizing: border-box;
+		}
+		
+		.right-column {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
 		}
 	}
 
