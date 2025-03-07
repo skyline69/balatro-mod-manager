@@ -5,30 +5,10 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 //
-// // GitHub API response structures
-// #[derive(Deserialize, Debug)]
-// struct GitHubCommit {
-//     sha: String,
-//     commit: GitHubCommitDetails,
-//     #[serde(default)]
-//     files: Vec<GitHubFile>,
-// }
-//
-// #[derive(Deserialize, Debug)]
-// struct GitHubCommitDetails {
-//     author: GitHubAuthor,
-// }
-//
-// #[derive(Deserialize, Debug)]
-// struct GitHubAuthor {
-//     date: String,
-// }
-//
-// #[derive(Deserialize, Debug)]
-// struct GitHubFile {
-//     filename: String,
-// }
-//
+
+const CURRENT_BRANCH: &str = "80-suggestion-allow-specifying-mod-folder-name";
+// const CURRENT_BRANCH: &str = "main";
+
 // Helper function to extract repo owner and name from URL
 pub fn parse_github_url(url: &str) -> Option<(String, String)> {
     let url = url.trim_end_matches(".git");
@@ -67,7 +47,7 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
 
     // Determine which branch to use based on the repository
     let mut branch = if url == "https://github.com/skyline69/balatro-mod-index" {
-        "80-suggestion-allow-specifying-mod-folder-name" // Use specific branch for mod index
+        CURRENT_BRANCH
     } else {
         // Default to "main" initially
         "main"
@@ -286,7 +266,7 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
     // Parse the content - first line is the URL
     let lines: Vec<&str> = git_info_content.lines().collect();
     let url = lines[0].trim().to_string();
-    
+
     log::info!("URL from git_info: {}", url);
 
     // Delete everything except .git_info
@@ -317,8 +297,7 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
 
     // For balatro-mod-index, always use the specific branch regardless of what's in .git_info
     if url.contains("skyline69/balatro-mod-index") {
-        let branch = "80-suggestion-allow-specifying-mod-folder-name";
-        clone_repository_with_branch(&url, path, branch).await
+        clone_repository_with_branch(&url, path, CURRENT_BRANCH).await
     } else {
         // For other repositories, use the saved branch or default to main/master
         let branch_line = lines.get(1).unwrap_or(&"");
@@ -331,7 +310,6 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
         }
     }
 }
-
 
 pub async fn clone_repository_with_branch(
     url: &str,
@@ -346,17 +324,18 @@ pub async fn clone_repository_with_branch(
         "https://github.com/{}/{}/archive/refs/heads/{}.zip",
         owner, repo, branch
     );
-    
-    log::info!("Downloading from URL: {}", download_url);  // Debug print
+
+    log::info!("Downloading from URL: {}", download_url); // Debug print
 
     let response = reqwest::get(&download_url)
         .await
         .map_err(|e| format!("Failed to download repository from {}: {}", download_url, e))?;
-    
+
     if !response.status().is_success() {
         return Err(format!(
             "GitHub returned error status: {} for URL {}",
-            response.status(), download_url
+            response.status(),
+            download_url
         ));
     }
 
@@ -364,8 +343,8 @@ pub async fn clone_repository_with_branch(
         .bytes()
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    log::info!("Downloaded {} bytes", bytes.len());  // Debug print
+
+    log::info!("Downloaded {} bytes", bytes.len()); // Debug print
 
     // Create target directory
     let target_path = PathBuf::from(path);
@@ -377,16 +356,19 @@ pub async fn clone_repository_with_branch(
     let mut file = File::create(&temp_zip).map_err(|e| format!("Failed to create file: {}", e))?;
     file.write_all(&bytes)
         .map_err(|e| format!("Failed to write file: {}", e))?;
-    
-    log::info!("Saved zip file to {}", temp_zip.display());  // Debug print
+
+    log::info!("Saved zip file to {}", temp_zip.display()); // Debug print
 
     // Extract zip file
     let file =
         std::fs::File::open(&temp_zip).map_err(|e| format!("Failed to open zip file: {}", e))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| format!("Failed to parse zip file: {}. This might mean the downloaded file is not a valid zip archive.", e))?;
-    
-    log::info!("Successfully opened zip archive with {} files", archive.len());  // Debug print
+
+    log::info!(
+        "Successfully opened zip archive with {} files",
+        archive.len()
+    ); // Debug print
 
     // Rest of the extraction code remains the same...
     for i in 0..archive.len() {
@@ -436,9 +418,8 @@ pub async fn clone_repository_with_branch(
     let info_content = format!("{}\nbranch={}", url, branch);
     std::fs::write(git_info, info_content)
         .map_err(|e| format!("Failed to write repository info: {}", e))?;
-    
-    log::info!("Successfully cloned repository with branch: {}", branch);  // Debug print
+
+    log::info!("Successfully cloned repository with branch: {}", branch); // Debug print
 
     Ok(())
 }
-
