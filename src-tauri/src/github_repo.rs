@@ -6,8 +6,8 @@ use std::io::Write;
 use std::path::PathBuf;
 //
 
-// const CURRENT_BRANCH: &str = "80-suggestion-allow-specifying-mod-folder-name";
-const CURRENT_BRANCH: &str = "main";
+const CURRENT_BRANCH: &str = "80-suggestion-allow-specifying-mod-folder-name";
+// const CURRENT_BRANCH: &str = "main";
 
 // Helper function to extract repo owner and name from URL
 pub fn parse_github_url(url: &str) -> Option<(String, String)> {
@@ -46,7 +46,7 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
         parse_github_url(url).ok_or_else(|| "Invalid GitHub URL format".to_string())?;
 
     // Determine which branch to use based on the repository
-    let mut branch = if url == "https://github.com/skyline69/balatro-mod-index" {
+    let mut branch = if url.contains("skyline69/balatro-mod-index") {
         CURRENT_BRANCH
     } else {
         // Default to "main" initially
