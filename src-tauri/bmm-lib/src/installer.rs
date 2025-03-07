@@ -39,7 +39,7 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
 
     let mod_name = {
         if let Some(name) = folder_name.filter(|n| !n.is_empty()) {
-            // Use provided folderName if it exists and is not empty
+            // Use provided folder name if it exists and isn't empty
             name
         } else {
             // Extract from URL as fallback
@@ -49,9 +49,9 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
                 .and_then(|s| s.split('.').next())
                 .unwrap_or("unknown_mod");
 
-            // If the URL name is too generic (like "1" or just a version number)
-            if url_name.len() <= 2 || url_name.chars().all(|c| c.is_digit(10) || c == '.') {
-                // Generate a name using the current timestamp to ensure uniqueness
+            // If the extracted name is too generic (like "main" or "master")
+            if url_name == "main" || url_name == "master" || url_name.len() <= 2 {
+                // Generate a more unique name with a timestamp
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()

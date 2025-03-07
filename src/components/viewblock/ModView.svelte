@@ -346,7 +346,8 @@
 				if (selectedVersion === "newest") {
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
-						folderName: mod.folderName,
+						folderName:
+							mod.folderName || mod.title.replace(/\s+/g, ""),
 					});
 				} else {
 					installedPath = await invoke<string>(
@@ -373,7 +374,8 @@
 				if (selectedVersion === "newest") {
 					installedPath = await invoke<string>("install_mod", {
 						url: mod.downloadURL,
-						folderName: mod.folderName,
+						folderName:
+							mod.folderName || mod.title.replace(/\s+/g, ""),
 					});
 				} else {
 					installedPath = await invoke<string>(
@@ -398,7 +400,7 @@
 			} else {
 				const installedPath = await invoke<string>("install_mod", {
 					url: mod.downloadURL,
-					folderName: mod.folderName,
+					folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
 				});
 				await invoke("add_installed_mod", {
 					name: mod.title,

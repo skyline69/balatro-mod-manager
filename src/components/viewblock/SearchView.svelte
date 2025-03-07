@@ -144,7 +144,7 @@
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
-				folderName: mod.folderName,
+				folderName: mod.folderName || mod.title.replace(/\s+/g, ""),
 			});
 
 			await invoke("add_installed_mod", {
