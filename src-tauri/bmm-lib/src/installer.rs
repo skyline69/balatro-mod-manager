@@ -4,12 +4,12 @@ use reqwest::Client;
 use std::fs;
 use std::io::Read;
 use std::io::{self, Cursor};
+use std::path::Path;
 use std::path::PathBuf;
 use tar::Archive;
 use zip::ZipArchive;
-use std::path::Path;
 
-pub async fn install_mod(url: String) -> Result<PathBuf, AppError> {
+pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<PathBuf, AppError> {
     let client = Client::new();
     let response = client
         .get(&url)
@@ -37,16 +37,37 @@ pub async fn install_mod(url: String) -> Result<PathBuf, AppError> {
         .join("Balatro")
         .join("Mods");
 
-    let mod_name = url
-        .split('/')
-        .last()
-        .and_then(|s| s.split('.').next())
-        .unwrap_or("unknown_mod");
+    let mod_name = {
+        if let Some(name) = folder_name.filter(|n| !n.is_empty()) {
+            // Use provided folderName if it exists and is not empty
+            name
+        } else {
+            // Extract from URL as fallback
+            let url_name = url
+                .split('/')
+                .last()
+                .and_then(|s| s.split('.').next())
+                .unwrap_or("unknown_mod");
+
+            // If the URL name is too generic (like "1" or just a version number)
+            if url_name.len() <= 2 || url_name.chars().all(|c| c.is_digit(10) || c == '.') {
+                // Generate a name using the current timestamp to ensure uniqueness
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+
+                format!("mod_{}", timestamp)
+            } else {
+                url_name.to_string()
+            }
+        }
+    };
 
     log::info!("Installing mod: {}", url);
 
     let installed_path = match file_type {
-        "application/zip" => handle_zip(file, &mod_dir, mod_name)?,
+        "application/zip" => handle_zip(file, &mod_dir, &mod_name)?,
         "application/x-tar" => handle_tar(file, &mod_dir)?,
         "application/gzip" => handle_tar_gz(file, &mod_dir)?,
         _ => {
@@ -68,7 +89,7 @@ fn handle_zip(file: bytes::Bytes, mod_dir: &Path, mod_name: &str) -> Result<Path
         source: format!("Invalid zip archive: {}", e),
     })?;
 
-    // Explicitly annotate the closure's return type
+    // Determine if ZIP has root files
     let has_root_files = (0..zip.len()).try_fold(false, |acc, i| -> Result<bool, AppError> {
         let file = zip.by_index(i).map_err(|e| AppError::FileRead {
             path: mod_dir.to_path_buf(),
@@ -77,18 +98,62 @@ fn handle_zip(file: bytes::Bytes, mod_dir: &Path, mod_name: &str) -> Result<Path
         Ok(acc || !file.name().contains('/'))
     })?;
 
-    let installed_path = if has_root_files {
-        let new_dir = mod_dir.join(mod_name);
-        extract_zip_root(&mut zip, &new_dir)?;
-        new_dir
-    } else {
-        let root_dir = get_zip_root_dir(&mut zip, mod_dir)?;
-        let root_path = mod_dir.join(root_dir);
-        extract_zip(&mut zip, mod_dir)?;
-        root_path
-    };
+    // The target directory where the mod will be installed
+    let target_dir = mod_dir.join(mod_name);
 
-    Ok(installed_path)
+    // Remove target directory if it exists
+    if target_dir.exists() {
+        fs::remove_dir_all(&target_dir).map_err(|e| AppError::FileWrite {
+            path: target_dir.clone(),
+            source: e.to_string(),
+        })?;
+    }
+
+    if has_root_files {
+        // For ZIPs with root files
+        fs::create_dir_all(&target_dir).map_err(|e| AppError::DirCreate {
+            path: target_dir.clone(),
+            source: e.to_string(),
+        })?;
+
+        extract_zip_root(&mut zip, &target_dir)?;
+    } else {
+        // For ZIPs with a folder structure
+        // Create temp directory
+        let temp_dir = mod_dir.join("temp_extract");
+        if temp_dir.exists() {
+            fs::remove_dir_all(&temp_dir).map_err(|e| AppError::DirCreate {
+                path: temp_dir.clone(),
+                source: e.to_string(),
+            })?;
+        }
+
+        fs::create_dir_all(&temp_dir).map_err(|e| AppError::DirCreate {
+            path: temp_dir.clone(),
+            source: e.to_string(),
+        })?;
+
+        // Extract to temp directory
+        extract_zip(&mut zip, &temp_dir)?;
+
+        // Get root directory name
+        let root_dir = get_zip_root_dir(&mut zip, &temp_dir)?;
+        let source_dir = temp_dir.join(root_dir);
+
+        // Move to target directory
+        fs::rename(&source_dir, &target_dir).map_err(|e| AppError::FileWrite {
+            path: source_dir.clone(),
+            source: format!("Failed to rename directory: {}", e),
+        })?;
+
+        // Clean up
+        fs::remove_dir_all(&temp_dir).map_err(|e| AppError::DirCreate {
+            path: temp_dir.clone(),
+            source: e.to_string(),
+        })?;
+    }
+
+    Ok(target_dir)
 }
 
 fn extract_zip_root(
@@ -138,10 +203,7 @@ fn get_zip_root_dir(
         .ok_or_else(|| AppError::InvalidState("Empty zip archive".into()))
 }
 
-fn extract_zip(
-    zip: &mut ZipArchive<Cursor<bytes::Bytes>>,
-    mod_dir: &Path,
-) -> Result<(), AppError> {
+fn extract_zip(zip: &mut ZipArchive<Cursor<bytes::Bytes>>, mod_dir: &Path) -> Result<(), AppError> {
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| AppError::FileRead {
             path: mod_dir.to_path_buf(),

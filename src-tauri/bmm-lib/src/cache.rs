@@ -1,3 +1,4 @@
+use crate::errors::AppError;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -7,7 +8,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::errors::AppError;
 
 const CACHE_DURATION: u64 = 15 * 60; // 15 minutes in seconds
 
@@ -23,6 +23,7 @@ struct ModCache {
     mods: Vec<Mod>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Mod {
     pub title: String,
@@ -43,6 +44,7 @@ pub struct Mod {
     pub repo: String,
     #[serde(rename = "downloadURL")]
     pub download_url: String,
+    pub folderName: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -101,28 +103,29 @@ pub fn clear_cache() -> Result<(), AppError> {
     // Delete mods cache
     let mods_cache = cache_dir.join("mods.cache.bin.gz");
     if mods_cache.exists() {
-        std::fs::remove_file(&mods_cache)
-            .map_err(|e| AppError::FileWrite {
-                path: mods_cache,
-                source: e.to_string(),
-            })?;
+        std::fs::remove_file(&mods_cache).map_err(|e| AppError::FileWrite {
+            path: mods_cache,
+            source: e.to_string(),
+        })?;
     }
 
     // Delete version caches
-    ["versions-steamodded.cache.bin.gz", "versions-talisman.cache.bin.gz"]
-        .into_iter()
-        .try_for_each(|file| {
-            let path = cache_dir.join(file);
-            if path.exists() {
-                std::fs::remove_file(&path)
-                    .map_err(|e| AppError::FileWrite {
-                        path: path.clone(),
-                        source: e.to_string(),
-                    })
-            } else {
-                Ok(())
-            }
-        })
+    [
+        "versions-steamodded.cache.bin.gz",
+        "versions-talisman.cache.bin.gz",
+    ]
+    .into_iter()
+    .try_for_each(|file| {
+        let path = cache_dir.join(file);
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| AppError::FileWrite {
+                path: path.clone(),
+                source: e.to_string(),
+            })
+        } else {
+            Ok(())
+        }
+    })
 }
 
 pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), AppError> {
@@ -130,19 +133,17 @@ pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), Ap
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager");
 
-    std::fs::create_dir_all(&path)
-        .map_err(|e| AppError::DirCreate {
-            path: path.clone(),
-            source: e.to_string(),
-        })?;
+    std::fs::create_dir_all(&path).map_err(|e| AppError::DirCreate {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
 
     path.push(format!("versions-{}.cache.bin.gz", mod_type));
 
-    let file = File::create(&path)
-        .map_err(|e| AppError::FileWrite {
-            path: path.clone(),
-            source: e.to_string(),
-        })?;
+    let file = File::create(&path).map_err(|e| AppError::FileWrite {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
 
     let mut encoder = GzEncoder::new(file, Compression::default());
     let timestamp = SystemTime::now()
@@ -158,11 +159,10 @@ pub fn save_versions_cache(mod_type: &str, versions: &[String]) -> Result<(), Ap
         versions: versions.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache)
-        .map_err(|e| AppError::Serialization {
-            format: "bincode".into(),
-            source: e.to_string(),
-        })?;
+    bincode::serialize_into(&mut encoder, &cache).map_err(|e| AppError::Serialization {
+        format: "bincode".into(),
+        source: e.to_string(),
+    })?;
 
     Ok(())
 }
@@ -214,11 +214,10 @@ pub fn get_cache_path() -> Result<PathBuf, AppError> {
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("cache directory")))?
         .join("balatro-mod-manager");
 
-    std::fs::create_dir_all(&path)
-        .map_err(|e| AppError::DirCreate {
-            path: path.clone(),
-            source: e.to_string(),
-        })?;
+    std::fs::create_dir_all(&path).map_err(|e| AppError::DirCreate {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
 
     path.push("mods.cache.bin.gz");
     Ok(path)
@@ -226,11 +225,10 @@ pub fn get_cache_path() -> Result<PathBuf, AppError> {
 
 pub fn save_cache(mods: &[Mod]) -> Result<(), AppError> {
     let path = get_cache_path()?;
-    let file = File::create(&path)
-        .map_err(|e| AppError::FileWrite {
-            path: path.clone(),
-            source: e.to_string(),
-        })?;
+    let file = File::create(&path).map_err(|e| AppError::FileWrite {
+        path: path.clone(),
+        source: e.to_string(),
+    })?;
 
     let mut encoder = GzEncoder::new(file, Compression::default());
     let timestamp = SystemTime::now()
@@ -246,11 +244,10 @@ pub fn save_cache(mods: &[Mod]) -> Result<(), AppError> {
         mods: mods.to_vec(),
     };
 
-    bincode::serialize_into(&mut encoder, &cache)
-        .map_err(|e| AppError::Serialization {
-            format: "bincode".into(),
-            source: e.to_string(),
-        })?;
+    bincode::serialize_into(&mut encoder, &cache).map_err(|e| AppError::Serialization {
+        format: "bincode".into(),
+        source: e.to_string(),
+    })?;
 
     Ok(())
 }
@@ -302,13 +299,13 @@ mod tests {
 
         std::env::set_var("XDG_CACHE_HOME", temp_dir.path());
         let result = test(temp_dir.path().to_path_buf());
-        
+
         if let Some(val) = original_cache {
             std::env::set_var("XDG_CACHE_HOME", val);
         } else {
             std::env::remove_var("XDG_CACHE_HOME");
         }
-        
+
         result
     }
 
@@ -331,15 +328,15 @@ mod tests {
                 publisher: "Test".into(),
                 repo: "test/test".into(),
                 download_url: "https://test.com/mod.zip".into(),
+                folderName: None,
             };
 
             save_cache(&[test_mod.clone()])?;
             let loaded = load_cache()?.expect("Should load cache");
-            
+
             assert_eq!(loaded.0.len(), 1);
             assert_eq!(loaded.0[0].title, "Test Mod");
             Ok(())
         })
     }
 }
-

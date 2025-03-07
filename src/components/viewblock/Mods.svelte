@@ -229,6 +229,7 @@
 
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
+				folderName: mod.folderName || mod.title, // Use title as fallback
 			});
 
 			await invoke("add_installed_mod", {
@@ -265,6 +266,7 @@
 		author: string;
 		repo: string;
 		downloadURL?: string;
+		folderName?: string;
 	}
 
 	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
@@ -396,6 +398,7 @@
 								publisher: meta.author,
 								repo: meta.repo,
 								downloadURL: meta.downloadURL || "",
+								folderName: meta.folderName,
 								installed: false,
 							} as Mod;
 						} catch (error) {

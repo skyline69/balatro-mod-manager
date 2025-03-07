@@ -15,6 +15,7 @@ export interface Mod {
 	publisher: string;
 	repo: string;
 	downloadURL: string;
+	folderName: string;
 	installed: boolean;
 }
 

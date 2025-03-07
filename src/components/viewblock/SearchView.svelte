@@ -140,9 +140,11 @@
 		if (mod.requires_talisman) dependencies.push("Talisman");
 
 		try {
+			console.log("Mod: ", mod);
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 			const installedPath = await invoke<string>("install_mod", {
 				url: mod.downloadURL,
+				folderName: mod.folderName,
 			});
 
 			await invoke("add_installed_mod", {

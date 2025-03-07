@@ -58,6 +58,8 @@ pub struct ModMeta {
     pub title: String,
     #[serde(rename = "downloadURL")]
     pub download_url: Option<String>,
+    #[serde(rename = "folderName", default)]
+    pub folder_name: String,
 }
 
 #[tauri::command]
@@ -543,9 +545,17 @@ async fn check_existing_installation(
     }
 }
 
+#[allow(non_snake_case)]
 #[tauri::command]
-async fn install_mod(url: String) -> Result<PathBuf, String> {
-    map_error(bmm_lib::installer::install_mod(url).await)
+async fn install_mod(url: String, folderName: String) -> Result<PathBuf, String> {
+    let folderName = {
+        if folderName.is_empty() {
+            None
+        } else {
+            Some(folderName)
+        }
+    };
+    map_error(bmm_lib::installer::install_mod(url, folderName).await)
 }
 
 #[tauri::command]

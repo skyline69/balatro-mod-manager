@@ -65,14 +65,38 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
     let (owner, repo) =
         parse_github_url(url).ok_or_else(|| "Invalid GitHub URL format".to_string())?;
 
-    // Download the repository as a zip file
-    let download_url = format!(
-        "https://github.com/{}/{}/archive/refs/heads/main.zip",
-        owner, repo
+    // Determine which branch to use based on the repository
+    let mut branch = if url == "https://github.com/skyline69/balatro-mod-index" {
+        "80-suggestion-allow-specifying-mod-folder-name" // Use specific branch for mod index
+    } else {
+        // Default to "main" initially
+        "main"
+    };
+
+    // Download the repository as a zip file from the chosen branch
+    let mut download_url = format!(
+        "https://github.com/{}/{}/archive/refs/heads/{}.zip",
+        owner, repo, branch
     );
-    let response = reqwest::get(&download_url)
-        .await
-        .map_err(|e| format!("Failed to download repository: {}", e))?;
+
+    let mut response = reqwest::get(&download_url).await;
+
+    // If the first attempt fails and we're not using a specific branch already,
+    // try with "master" branch instead
+    if response.is_err()
+        && branch == "main"
+        && url != "https://github.com/skyline69/balatro-mod-index"
+    {
+        branch = "master"; // Update the branch variable
+        download_url = format!(
+            "https://github.com/{}/{}/archive/refs/heads/{}.zip",
+            owner, repo, branch
+        );
+        response = reqwest::get(&download_url).await;
+    }
+
+    // If still failing, return the error
+    let response = response.map_err(|e| format!("Failed to download repository: {}", e))?;
 
     let bytes = response
         .bytes()
@@ -138,9 +162,11 @@ pub async fn clone_repository(url: &str, path: &str) -> Result<(), String> {
     // Clean up temp zip file
     std::fs::remove_file(temp_zip).ok();
 
-    // Create a simple .git_info file to store repo URL (for pulls)
+    // Create a simple .git_info file to store repo URL and branch (for pulls)
     let git_info = target_path.join(".git_info");
-    std::fs::write(git_info, url).map_err(|e| format!("Failed to write repository info: {}", e))?;
+    let info_content = format!("{}\nbranch={}", url, branch);
+    std::fs::write(git_info, info_content)
+        .map_err(|e| format!("Failed to write repository info: {}", e))?;
 
     Ok(())
 }
@@ -253,9 +279,15 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
         ));
     }
 
-    // Rest of the function remains the same...
-    let url = std::fs::read_to_string(&git_info_path)
+    // Read the git info content
+    let git_info_content = std::fs::read_to_string(&git_info_path)
         .map_err(|e| format!("Failed to read repository info: {}", e))?;
+
+    // Parse the content - first line is the URL
+    let lines: Vec<&str> = git_info_content.lines().collect();
+    let url = lines[0].trim().to_string();
+    
+    log::info!("URL from git_info: {}", url);
 
     // Delete everything except .git_info
     for entry in
@@ -283,6 +315,130 @@ pub async fn pull_repository(path: &str) -> Result<(), String> {
         }
     }
 
-    // Clone again
-    clone_repository(&url, path).await
+    // For balatro-mod-index, always use the specific branch regardless of what's in .git_info
+    if url.contains("skyline69/balatro-mod-index") {
+        let branch = "80-suggestion-allow-specifying-mod-folder-name";
+        clone_repository_with_branch(&url, path, branch).await
+    } else {
+        // For other repositories, use the saved branch or default to main/master
+        let branch_line = lines.get(1).unwrap_or(&"");
+        let branch_prefix = "branch=";
+        if let Some(stripped) = branch_line.strip_prefix(branch_prefix) {
+            let branch = stripped.trim();
+            clone_repository_with_branch(&url, path, branch).await
+        } else {
+            clone_repository(&url, path).await
+        }
+    }
 }
+
+
+pub async fn clone_repository_with_branch(
+    url: &str,
+    path: &str,
+    branch: &str,
+) -> Result<(), String> {
+    let (owner, repo) =
+        parse_github_url(url).ok_or_else(|| "Invalid GitHub URL format".to_string())?;
+
+    // Download the repository as a zip file from the specified branch
+    let download_url = format!(
+        "https://github.com/{}/{}/archive/refs/heads/{}.zip",
+        owner, repo, branch
+    );
+    
+    log::info!("Downloading from URL: {}", download_url);  // Debug print
+
+    let response = reqwest::get(&download_url)
+        .await
+        .map_err(|e| format!("Failed to download repository from {}: {}", download_url, e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!(
+            "GitHub returned error status: {} for URL {}",
+            response.status(), download_url
+        ));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    log::info!("Downloaded {} bytes", bytes.len());  // Debug print
+
+    // Create target directory
+    let target_path = PathBuf::from(path);
+    std::fs::create_dir_all(&target_path)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    // Save zip file to temporary location
+    let temp_zip = target_path.join("temp.zip");
+    let mut file = File::create(&temp_zip).map_err(|e| format!("Failed to create file: {}", e))?;
+    file.write_all(&bytes)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    log::info!("Saved zip file to {}", temp_zip.display());  // Debug print
+
+    // Extract zip file
+    let file =
+        std::fs::File::open(&temp_zip).map_err(|e| format!("Failed to open zip file: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to parse zip file: {}. This might mean the downloaded file is not a valid zip archive.", e))?;
+    
+    log::info!("Successfully opened zip archive with {} files", archive.len());  // Debug print
+
+    // Rest of the extraction code remains the same...
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to access file in zip: {}", e))?;
+
+        // Get the path removing the repository name folder
+        let name = file.name();
+        let parts: Vec<&str> = name.split('/').collect();
+        if parts.len() <= 1 {
+            continue;
+        }
+
+        let rel_path = parts[1..].join("/");
+        if rel_path.is_empty() {
+            continue;
+        }
+
+        let target = target_path.join(&rel_path);
+
+        // Create directories
+        if file.is_dir() {
+            std::fs::create_dir_all(&target)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+            continue;
+        }
+
+        // Create parent directories for files
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+
+        // Extract files
+        let mut outfile =
+            File::create(&target).map_err(|e| format!("Failed to create file: {}", e))?;
+        std::io::copy(&mut file, &mut outfile)
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+    }
+
+    // Clean up temp zip file
+    std::fs::remove_file(temp_zip).ok();
+
+    // Create a simple .git_info file to store repo URL and branch (for pulls)
+    let git_info = target_path.join(".git_info");
+    let info_content = format!("{}\nbranch={}", url, branch);
+    std::fs::write(git_info, info_content)
+        .map_err(|e| format!("Failed to write repository info: {}", e))?;
+    
+    log::info!("Successfully cloned repository with branch: {}", branch);  // Debug print
+
+    Ok(())
+}
+

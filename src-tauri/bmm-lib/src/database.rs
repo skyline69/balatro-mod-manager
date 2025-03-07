@@ -150,6 +150,7 @@ impl Database {
                 publisher: row.get(9)?,
                 repo: row.get(10)?,
                 download_url: row.get(11)?,
+                folderName: row.get(12)?
             });
         }
 
@@ -167,8 +168,8 @@ impl Database {
                 "INSERT INTO mod_cache (
                     title, description, image, categories, 
                     colors, installed, requires_steamodded, requires_talisman,
-                    publisher, repo, download_url
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    publisher, repo, download_url, folder_name
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 [
                     m.title,
                     m.description,
@@ -182,6 +183,7 @@ impl Database {
                     m.publisher,
                     m.repo,
                     m.download_url,
+                    m.folderName.unwrap_or_default() 
                 ],
             )?;
         }

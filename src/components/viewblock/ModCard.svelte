@@ -46,7 +46,7 @@
 		}
 	}
 
-	async function installModFromURL(url: string) {
+	async function installModFromURL(url: string, folder_name: string = "") {
 		try {
 			loadingStates.update((s) => ({ ...s, [mod.title]: true }));
 
@@ -55,11 +55,18 @@
 				throw new Error(`Invalid URL format: ${url}`);
 			}
 
-			const installedPath = await invoke<string>("install_mod", { url });
+			// Use mod title as fallback if folder_name is empty
+			const folderName = folder_name || mod.title || "";
+
+			const installedPath = await invoke<string>("install_mod", {
+				url,
+				folderName,
+			});
+
 			await invoke("add_installed_mod", {
 				name: mod.title,
 				path: installedPath,
-				dependencies: ["Steamodded"],
+				dependencies: mod.requires_steamodded ? ["Steamodded"] : [],
 			});
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
