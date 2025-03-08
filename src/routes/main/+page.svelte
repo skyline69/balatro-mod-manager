@@ -184,7 +184,7 @@
 		{onError}
 	/>
 
-	<div class="version-text">v0.1.7</div>
+	<div class="version-text">v0.1.8</div>
 </div>
 
 <style>

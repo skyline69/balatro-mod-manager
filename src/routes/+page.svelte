@@ -98,7 +98,7 @@
 <div class="app">
 	<h1>Welcome to Balatro Mod Manager</h1>
 	<BalatroPicker />
-	<div class="version-text">v0.1.7</div>
+	<div class="version-text">v0.1.8</div>
 </div>
 
 <style>
