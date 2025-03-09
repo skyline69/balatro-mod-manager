@@ -982,23 +982,7 @@
 		margin: 1rem 0;
 	}
 
-	.download-button {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 1rem;
-		background: #56a786;
-		color: #f4eee0;
-		border: none;
-		border-radius: 6px;
-		font-size: 1rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		font-family: "M6X11", sans-serif;
-	}
-
+	.download-button,
 	.update-button {
 		flex: 1;
 		display: flex;
@@ -1006,14 +990,24 @@
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 1rem;
-		background: #3498db; /* Bright blue color */
-		color: #f4eee0;
 		border: none;
 		border-radius: 6px;
 		font-size: 1rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
+		/* Fixed height to prevent resizing */
+		min-height: 48px;
+	}
+
+	.download-button {
+		background: #56a786;
+		color: #f4eee0;
+	}
+
+	.update-button {
+		background: #3498db; /* Bright blue color */
+		color: #f4eee0;
 	}
 
 	.update-button:hover:not(:disabled) {
@@ -1026,11 +1020,11 @@
 	}
 
 	.spinner {
-		border: 3px solid rgba(255, 255, 255, 0.3);
-		border-top: 3px solid #ffffff;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top: 2px solid #ffffff;
 		border-radius: 50%;
-		width: 20px;
-		height: 20px;
+		width: 16px;
+		height: 16px;
 		animation: spin 1s linear infinite;
 	}
 

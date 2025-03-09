@@ -289,24 +289,7 @@
 		width: calc(100% - 2rem);
 	}
 
-	.download-button {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 0.75rem;
-		background: #56a786;
-		color: #f4eee0;
-		border: none;
-		outline: #459373 solid 2px;
-		border-radius: 4px;
-		font-family: "M6X11", sans-serif;
-		font-size: 1rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
+	.download-button,
 	.update-button {
 		flex: 1;
 		display: flex;
@@ -314,15 +297,27 @@
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 0.75rem;
-		background: #3498db; /* Bright blue color */
-		color: #f4eee0;
 		border: none;
-		outline: #2980b9 solid 2px; /* Darker blue for outline */
 		border-radius: 4px;
 		font-family: "M6X11", sans-serif;
 		font-size: 1rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		/* Add these properties to prevent resizing */
+		min-height: 42px; /* Set explicit height */
+		position: relative; /* For absolute positioning of spinner */
+	}
+
+	.download-button {
+		background: #56a786;
+		color: #f4eee0;
+		outline: #459373 solid 2px;
+	}
+
+	.update-button {
+		background: #3498db;
+		color: #f4eee0;
+		outline: #2980b9 solid 2px;
 	}
 
 	.update-button:hover {
@@ -376,12 +371,15 @@
 	}
 
 	.spinner {
-		border: 3px solid rgba(255, 255, 255, 0.3);
-		border-top: 3px solid #ffffff;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top: 2px solid #ffffff;
 		border-radius: 50%;
-		width: 20px;
-		height: 20px;
+		width: 16px;
+		height: 16px;
 		animation: spin 1s linear infinite;
+		/* Center the spinner while maintaining button size */
+		margin: 0 auto;
+		display: inline-block;
 	}
 
 	@keyframes spin {
