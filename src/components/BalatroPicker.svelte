@@ -5,7 +5,6 @@
 
 	import { goto } from "$app/navigation";
 
-
 	let selectedOption = "steam";
 	let showCustomInput = false;
 	let selectedPath = "";
@@ -181,6 +180,7 @@
 		justify-content: center;
 		align-items: center;
 		width: 100%;
+		overflow-x: hidden; /* Prevent horizontal scrolling */
 	}
 
 	.button-wrapper {
@@ -202,16 +202,17 @@
 		flex-direction: column;
 		align-items: center;
 		width: 400px;
+		max-width: 95vw; /* Ensure it doesn't overflow on smaller screens */
 		padding: 2.5rem;
 		border-radius: 25px;
 		background-color: var(--background-primary);
-		/* box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); */
 		outline: 2px solid var(--color-medium);
 		color: var(--text-primary);
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		height: auto;
 		min-height: 150px;
 		position: relative;
+		box-sizing: border-box; /* Include padding in width calculation */
 	}
 
 	.action-button {
@@ -286,8 +287,9 @@
 	}
 
 	.input-container {
-		width: 80%;
-		margin-top: 1rem;
+		width: 100%;
+		margin: 1rem 0; /* Change from 1rem to 1rem 0 to prevent horizontal overflow */
+		box-sizing: border-box; /* Include padding in width calculation */
 	}
 
 	h2 {
@@ -379,6 +381,7 @@
 		text-overflow: ellipsis;
 		-webkit-user-select: none;
 		user-select: none;
+		box-sizing: border-box; /* Include padding and border in width calculation */
 	}
 
 	input[type="text"]:hover {
