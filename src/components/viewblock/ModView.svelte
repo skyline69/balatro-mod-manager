@@ -8,6 +8,7 @@
 		ArrowLeft,
 		Github,
 		X,
+		RefreshCw,
 	} from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { open } from "@tauri-apps/plugin-shell";
@@ -24,6 +25,10 @@
 	import { cachedVersions } from "../../stores/modStore";
 	import { modsStore } from "../../stores/modStore";
 	import { untrack } from "svelte";
+	import { writable } from "svelte/store";
+
+	// Store to track which mods have updates available
+	const updateAvailable = writable<Record<string, boolean>>({});
 
 	const VERSION_CACHE_DURATION = 60 * 60 * 1000;
 
@@ -50,6 +55,7 @@
 	let selectedVersion = $state("newest");
 	let loadingVersions = $state(false);
 	let renderedDescription = $state("");
+	let isCheckingForUpdates = $state(false);
 
 	let versionLoadStarted = false;
 	let prevModTitle = "";
@@ -70,6 +76,27 @@
 	interface internalModLinkData {
 		isMod: boolean;
 		modName: string;
+	}
+
+	// Check if an update is available for the current mod
+	async function checkForUpdate(modName: string) {
+		if (isCheckingForUpdates) return;
+
+		isCheckingForUpdates = true;
+		try {
+			const hasUpdate = await invoke<boolean>("mod_update_available", {
+				modName,
+			});
+
+			updateAvailable.update((updates) => ({
+				...updates,
+				[modName]: hasUpdate,
+			}));
+		} catch (error) {
+			console.error("Failed to check for updates:", error);
+		} finally {
+			isCheckingForUpdates = false;
+		}
 	}
 
 	function isInternalModLink(url: string): internalModLinkData {
@@ -295,13 +322,19 @@
 					...s,
 					[mod.title]: false,
 				}));
+
+				// Reset update status for this mod
+				updateAvailable.update((updates) => ({
+					...updates,
+					[mod.title]: false,
+				}));
 			}
 		} catch (e) {
 			console.error("Failed to uninstall mod:", e);
 		}
 	};
 
-	const installMod = async (mod: Mod) => {
+	const installMod = async (mod: Mod, isUpdate = false) => {
 		// Check dependencies first before doing anything else
 		if (mod.requires_steamodded || mod.requires_talisman) {
 			// Check Steamodded if required
@@ -319,10 +352,11 @@
 				: true;
 
 			// If any dependency is missing, show the RequiresPopup
-
+			// But skip this check if it's an update, as dependencies should already be installed
 			if (
-				(mod.requires_steamodded && !steamoddedInstalled) ||
-				(mod.requires_talisman && !talismanInstalled)
+				!isUpdate &&
+				((mod.requires_steamodded && !steamoddedInstalled) ||
+					(mod.requires_talisman && !talismanInstalled))
 			) {
 				// Call the handler with the appropriate requirements
 				onCheckDependencies?.({
@@ -366,9 +400,16 @@
 					name: mod.title,
 					path: installedPath,
 					dependencies,
+					currentVersion: mod.version || "",
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Reset update status after successful update
+				updateAvailable.update((updates) => ({
+					...updates,
+					[mod.title]: false,
+				}));
 			} else if (mod.title.toLowerCase() === "talisman") {
 				let installedPath;
 				if (selectedVersion === "newest") {
@@ -394,9 +435,16 @@
 					name: mod.title,
 					path: installedPath,
 					dependencies: [],
+					currentVersion: mod.version || "",
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Reset update status after successful update
+				updateAvailable.update((updates) => ({
+					...updates,
+					[mod.title]: false,
+				}));
 			} else {
 				const installedPath = await invoke<string>("install_mod", {
 					url: mod.downloadURL,
@@ -406,15 +454,30 @@
 					name: mod.title,
 					path: installedPath,
 					dependencies,
+					currentVersion: mod.version || "",
 				});
 				await getAllInstalledMods();
 				installationStatus.update((s) => ({ ...s, [mod.title]: true }));
+
+				// Reset update status after successful update
+				updateAvailable.update((updates) => ({
+					...updates,
+					[mod.title]: false,
+				}));
 			}
 		} catch (e) {
-			console.error("Failed to install mod:", e);
+			console.error(
+				`Failed to ${isUpdate ? "update" : "install"} mod:`,
+				e,
+			);
 		} finally {
 			loadingStates.update((s) => ({ ...s, [mod.title]: false }));
 		}
+	};
+
+	// Function to handle updating the mod
+	const updateMod = async (mod: Mod) => {
+		await installMod(mod, true);
 	};
 
 	function handleMarkdownClick(event: MouseEvent | KeyboardEvent) {
@@ -530,6 +593,11 @@
 				...s,
 				[mod.title]: status,
 			}));
+
+			// If the mod is installed, check for updates
+			if (status) {
+				checkForUpdate(mod.title);
+			}
 		}, 0);
 
 		return status;
@@ -717,22 +785,40 @@
 					{/if}
 				</div>
 				<div class="button-container">
-					<button
-						class="download-button"
-						class:installed={$installationStatus[mod.title]}
-						disabled={$installationStatus[mod.title] ||
-							$loadingStates[mod.title]}
-						onclick={() => installMod(mod)}
-					>
-						{#if $loadingStates[mod.title]}
-							<div class="spinner"></div>
-						{:else}
-							<Download size={18} />
-							{$installationStatus[mod.title]
-								? "Installed"
-								: "Download"}
-						{/if}
-					</button>
+					{#if $installationStatus[mod.title] && $updateAvailable[mod.title]}
+						<!-- Update button (when installed and update available) -->
+						<button
+							class="update-button"
+							onclick={() => updateMod(mod)}
+							disabled={$loadingStates[mod.title]}
+						>
+							{#if $loadingStates[mod.title]}
+								<div class="spinner"></div>
+							{:else}
+								<RefreshCw size={18} />
+								Update Mod
+							{/if}
+						</button>
+					{:else}
+						<!-- Regular download/installed button -->
+						<button
+							class="download-button"
+							class:installed={$installationStatus[mod.title]}
+							disabled={$installationStatus[mod.title] ||
+								$loadingStates[mod.title]}
+							onclick={() => installMod(mod)}
+						>
+							{#if $loadingStates[mod.title]}
+								<div class="spinner"></div>
+							{:else}
+								<Download size={18} />
+								{$installationStatus[mod.title]
+									? "Installed"
+									: "Download"}
+							{/if}
+						</button>
+					{/if}
+
 					{#if $installationStatus[mod.title]}
 						<button
 							class="delete-button"
@@ -911,6 +997,50 @@
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: "M6X11", sans-serif;
+	}
+
+	.update-button {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 1rem;
+		background: #3498db; /* Bright blue color */
+		color: #f4eee0;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: "M6X11", sans-serif;
+	}
+
+	.update-button:hover:not(:disabled) {
+		background: #5dade2; /* Lighter blue on hover */
+		transform: translateY(-2px);
+	}
+
+	.update-button:active:not(:disabled) {
+		transform: translateY(1px);
+	}
+
+	.spinner {
+		border: 3px solid rgba(255, 255, 255, 0.3);
+		border-top: 3px solid #ffffff;
+		border-radius: 50%;
+		width: 20px;
+		height: 20px;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 
 	.download-button:hover:not(.installed) {
@@ -1257,7 +1387,8 @@
 		}
 	}
 
-	.download-button:disabled {
+	.download-button:disabled,
+	.update-button:disabled {
 		opacity: 0.8;
 		cursor: not-allowed;
 	}

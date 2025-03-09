@@ -60,6 +60,8 @@ pub struct ModMeta {
     pub download_url: Option<String>,
     #[serde(rename = "folderName", default)]
     pub folder_name: String,
+    #[serde(default)]
+    pub version: String,
 }
 
 #[tauri::command]
@@ -75,6 +77,43 @@ async fn check_balatro_running() -> bool {
 #[tauri::command]
 async fn save_versions_cache(mod_type: String, versions: Vec<String>) -> Result<(), String> {
     map_error(cache::save_versions_cache(&mod_type, &versions))
+}
+
+#[tauri::command]
+async fn mod_update_available(
+    mod_name: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let last_installed_version = db
+        .get_last_installed_version(&mod_name)
+        .map_err(|e| e.to_string())?;
+
+    // If no version is installed, we can't determine if an update is available
+    if last_installed_version.is_empty() {
+        return Ok(false);
+    }
+
+    // Try to get the cached mods
+    let cached_mods = match crate::cache::load_cache().map_err(|e| e.to_string())? {
+        Some((mods, _)) => mods,
+        None => return Ok(false), // No cache available
+    };
+
+    // Look for the mod in the cache by matching either title or folderName
+    for cached_mod in cached_mods {
+        if cached_mod.title == mod_name || (cached_mod.folderName.as_ref() == Some(&mod_name)) {
+            // If we found a match and it has a version, compare versions
+            if let Some(remote_version) = cached_mod.version {
+                // If versions are different, consider an update available
+                return Ok(remote_version != last_installed_version);
+            }
+            break; // Found the mod but it has no version info
+        }
+    }
+
+    // No update found or couldn't determine
+    Ok(false)
 }
 
 #[tauri::command]
@@ -575,9 +614,17 @@ async fn add_installed_mod(
     name: String,
     path: String,
     dependencies: Vec<String>,
+    current_version: String,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    map_error(db.add_installed_mod(&name, &path, &dependencies))
+    let current_version = {
+        if current_version.is_empty() {
+            None
+        } else {
+            Some(current_version)
+        }
+    };
+    map_error(db.add_installed_mod(&name, &path, &dependencies, current_version))
 }
 
 #[tauri::command]
@@ -981,12 +1028,12 @@ pub fn run() {
             list_directories,
             read_json_file,
             read_text_file,
-            // get_mod_timestamps,
             get_mod_thumbnail,
             get_discord_rpc_status,
             set_discord_rpc_status,
             get_latest_steamodded_release,
-            set_discord_rpc_status
+            set_discord_rpc_status,
+            mod_update_available,
         ])
         .run(tauri::generate_context!());
 

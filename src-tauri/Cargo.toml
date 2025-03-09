@@ -8,6 +8,7 @@ keywords = ["gaming", "mods", "balatro", "manager", "tauri"]
 categories = ["games", "development-tools", "gui"]
 readme = "README.md"
 repository = "https://github.com/skyline69/balatro-mod-manager"
+publish = false
 
 
 [lib]

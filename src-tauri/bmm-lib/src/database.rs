@@ -1,4 +1,4 @@
-use crate::cache::Mod;
+// use crate::cache::Mod;
 use crate::errors::AppError;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -13,6 +13,7 @@ pub struct InstalledMod {
     pub name: String,
     pub path: String,
     pub dependencies: Vec<String>,
+    pub current_version: Option<String>,
 }
 
 impl Database {
@@ -33,9 +34,9 @@ impl Database {
     }
 
     pub fn get_mod_details(&self, mod_name: &str) -> Result<InstalledMod, AppError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT name, path, dependencies FROM installed_mods WHERE name = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT name, path, dependencies, current_version FROM installed_mods WHERE name = ?1",
+        )?;
 
         let mut rows = stmt.query([mod_name])?;
 
@@ -44,6 +45,7 @@ impl Database {
                 name: row.get(0)?,
                 path: row.get(1)?,
                 dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
+                current_version: row.get(3)?,
             })
         } else {
             Err(AppError::InvalidState(format!(
@@ -67,7 +69,8 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS installed_mods (
                 name TEXT PRIMARY KEY,
                 path TEXT NOT NULL,
-                dependencies TEXT NOT NULL DEFAULT '[]'
+                dependencies TEXT NOT NULL DEFAULT '[]',
+                current_version TEXT
             )",
             [],
         )
@@ -122,80 +125,80 @@ impl Database {
             Ok(0)
         }
     }
-
-    pub fn get_cached_mods(&self) -> Result<Vec<Mod>, AppError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT title, description, image, last_updated, categories, colors, 
-            installed, requires_steamodded, requires_talisman, publisher, repo, download_url 
-            FROM mod_cache",
-        )?;
-
-        let mut rows = stmt.query([])?;
-        let mut mods = Vec::new();
-
-        while let Some(row) = rows.next()? {
-            let categories: String = row.get(4)?;
-            let colors: String = row.get(5)?;
-
-            mods.push(Mod {
-                title: row.get(0)?,
-                description: row.get(1)?,
-                image: row.get(2)?,
-                // last_updated: row.get(3)?,
-                categories: serde_json::from_str(&categories)?,
-                colors: serde_json::from_str(&colors)?,
-                installed: row.get::<_, String>(6)?.parse().expect("Invalid boolean"),
-                requires_steamodded: row.get::<_, String>(7)?.parse().expect("Invalid boolean"),
-                requires_talisman: row.get::<_, String>(8)?.parse().expect("Invalid boolean"),
-                publisher: row.get(9)?,
-                repo: row.get(10)?,
-                download_url: row.get(11)?,
-                folderName: row.get(12)?
-            });
-        }
-
-        Ok(mods)
-    }
-
-    pub fn update_mod_cache(&mut self, mods: Vec<Mod>) -> Result<(), AppError> {
-        let tx = self.conn.transaction()?;
-
-        tx.execute("DELETE FROM mod_cache", [])?;
-
-        for m in mods {
-            let colors = serde_json::to_string(&m.colors)?;
-            tx.execute(
-                "INSERT INTO mod_cache (
-                    title, description, image, categories, 
-                    colors, installed, requires_steamodded, requires_talisman,
-                    publisher, repo, download_url, folder_name
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-                [
-                    m.title,
-                    m.description,
-                    m.image,
-                    // m.last_updated,
-                    serde_json::to_string(&m.categories)?,
-                    colors,
-                    m.installed.to_string(),
-                    m.requires_steamodded.to_string(),
-                    m.requires_talisman.to_string(),
-                    m.publisher,
-                    m.repo,
-                    m.download_url,
-                    m.folderName.unwrap_or_default() 
-                ],
-            )?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
+    //
+    // pub fn get_cached_mods(&self) -> Result<Vec<Mod>, AppError> {
+    //     let mut stmt = self.conn.prepare(
+    //         "SELECT title, description, image, last_updated, categories, colors,
+    //         installed, requires_steamodded, requires_talisman, publisher, repo, download_url
+    //         FROM mod_cache",
+    //     )?;
+    //
+    //     let mut rows = stmt.query([])?;
+    //     let mut mods = Vec::new();
+    //
+    //     while let Some(row) = rows.next()? {
+    //         let categories: String = row.get(4)?;
+    //         let colors: String = row.get(5)?;
+    //
+    //         mods.push(Mod {
+    //             title: row.get(0)?,
+    //             description: row.get(1)?,
+    //             image: row.get(2)?,
+    //             // last_updated: row.get(3)?,
+    //             categories: serde_json::from_str(&categories)?,
+    //             colors: serde_json::from_str(&colors)?,
+    //             installed: row.get::<_, String>(6)?.parse().expect("Invalid boolean"),
+    //             requires_steamodded: row.get::<_, String>(7)?.parse().expect("Invalid boolean"),
+    //             requires_talisman: row.get::<_, String>(8)?.parse().expect("Invalid boolean"),
+    //             publisher: row.get(9)?,
+    //             repo: row.get(10)?,
+    //             download_url: row.get(11)?,
+    //             folderName: row.get(12)?
+    //         });
+    //     }
+    //
+    //     Ok(mods)
+    // }
+    //
+    // pub fn update_mod_cache(&mut self, mods: Vec<Mod>) -> Result<(), AppError> {
+    //     let tx = self.conn.transaction()?;
+    //
+    //     tx.execute("DELETE FROM mod_cache", [])?;
+    //
+    //     for m in mods {
+    //         let colors = serde_json::to_string(&m.colors)?;
+    //         tx.execute(
+    //             "INSERT INTO mod_cache (
+    //                 title, description, image, categories,
+    //                 colors, installed, requires_steamodded, requires_talisman,
+    //                 publisher, repo, download_url, folder_name
+    //             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+    //             [
+    //                 m.title,
+    //                 m.description,
+    //                 m.image,
+    //                 // m.last_updated,
+    //                 serde_json::to_string(&m.categories)?,
+    //                 colors,
+    //                 m.installed.to_string(),
+    //                 m.requires_steamodded.to_string(),
+    //                 m.requires_talisman.to_string(),
+    //                 m.publisher,
+    //                 m.repo,
+    //                 m.download_url,
+    //                 m.folderName.unwrap_or_default()
+    //             ],
+    //         )?;
+    //     }
+    //
+    //     tx.commit()?;
+    //     Ok(())
+    // }
+    //
     pub fn get_installed_mods(&self) -> Result<Vec<InstalledMod>, AppError> {
         let mut stmt = self
             .conn
-            .prepare("SELECT name, path, dependencies FROM installed_mods")?;
+            .prepare("SELECT name, path, dependencies, current_version FROM installed_mods")?;
         let mut mods = Vec::new();
         let mut rows = stmt.query([])?;
 
@@ -204,6 +207,7 @@ impl Database {
                 name: row.get(0)?,
                 path: row.get(1)?,
                 dependencies: serde_json::from_str(&row.get::<_, String>(2)?)?,
+                current_version: row.get(3)?,
             });
         }
 
@@ -215,11 +219,12 @@ impl Database {
         name: &str,
         path: &str,
         dependencies: &[String],
+        current_version: Option<String>,
     ) -> Result<(), AppError> {
         let deps_json = serde_json::to_string(dependencies)?;
         self.conn.execute(
-            "INSERT OR REPLACE INTO installed_mods (name, path, dependencies) VALUES (?1, ?2, ?3)",
-            [name, path, &deps_json],
+            "INSERT OR REPLACE INTO installed_mods (name, path, dependencies, current_version) VALUES (?1, ?2, ?3, ?4)",
+            [name, path, &deps_json, &current_version.unwrap_or_default()],
         )?;
         Ok(())
     }
@@ -274,6 +279,31 @@ impl Database {
         self.conn.execute(
             "DELETE FROM settings WHERE setting = 'installation_path'",
             [],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_last_installed_version(&self, mod_name: &str) -> Result<String, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT current_version FROM installed_mods WHERE name = ?1")?;
+        let mut rows = stmt.query([mod_name])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(row.get(0)?)
+        } else {
+            Ok(String::new())
+        }
+    }
+
+    pub fn set_last_installed_version(
+        &self,
+        mod_name: &str,
+        version: &str,
+    ) -> Result<(), AppError> {
+        self.conn.execute(
+            "UPDATE installed_mods SET current_version = ?1 WHERE name = ?2",
+            [version, mod_name],
         )?;
         Ok(())
     }
@@ -356,7 +386,7 @@ mod tests {
         let db = create_memory_db()?;
 
         // Add with empty dependencies
-        db.add_installed_mod("TestMod", "/path/to/mod", &[])?;
+        db.add_installed_mod("TestMod", "/path/to/mod", &[], None)?;
         let mods = db.get_installed_mods()?;
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].name, "TestMod");
@@ -364,7 +394,7 @@ mod tests {
 
         // Add with dependencies
         let deps = vec!["Steamodded".to_string()];
-        db.add_installed_mod("DependentMod", "/another/path", &deps)?;
+        db.add_installed_mod("DependentMod", "/another/path", &deps, None)?;
         let mods = db.get_installed_mods()?;
         assert_eq!(mods[1].dependencies, deps);
 
@@ -393,7 +423,7 @@ mod tests {
         let db = create_memory_db()?;
         let deps = vec!["Steamodded".to_string()];
 
-        db.add_installed_mod("TestMod", "/path/to/mod", &deps)?;
+        db.add_installed_mod("TestMod", "/path/to/mod", &deps, None)?;
 
         let details = db.get_mod_details("TestMod")?;
         assert_eq!(details.name, "TestMod");

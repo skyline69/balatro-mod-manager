@@ -236,6 +236,7 @@
 				name: mod.title,
 				path: installedPath,
 				dependencies,
+				currentVersion: mod.version || "",
 			});
 
 			installationStatus.update((s) => ({ ...s, [mod.title]: true }));
@@ -267,6 +268,7 @@
 		repo: string;
 		downloadURL?: string;
 		folderName?: string;
+		version?: string;
 	}
 
 	const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
@@ -399,6 +401,7 @@
 								repo: meta.repo,
 								downloadURL: meta.downloadURL || "",
 								folderName: meta.folderName,
+								version: meta.version,
 								installed: false,
 							} as Mod;
 						} catch (error) {

@@ -150,6 +150,7 @@
 				name: mod.title,
 				path: installedPath,
 				dependencies,
+				currentVersion: mod.version || "",
 			});
 
 			await getAllInstalledMods();

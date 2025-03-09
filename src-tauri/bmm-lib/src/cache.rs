@@ -29,8 +29,6 @@ pub struct Mod {
     pub title: String,
     pub description: String,
     pub image: String,
-    // #[serde(rename = "lastUpdated")]
-    // pub last_updated: String,
     #[serde(rename = "categories")]
     pub categories: Vec<Category>,
     #[serde(rename = "colors")]
@@ -45,6 +43,7 @@ pub struct Mod {
     #[serde(rename = "downloadURL")]
     pub download_url: String,
     pub folderName: Option<String>,
+    pub version: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -329,6 +328,7 @@ mod tests {
                 repo: "test/test".into(),
                 download_url: "https://test.com/mod.zip".into(),
                 folderName: None,
+                version: None,
             };
 
             save_cache(&[test_mod.clone()])?;
