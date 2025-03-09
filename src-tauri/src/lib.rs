@@ -62,6 +62,8 @@ pub struct ModMeta {
     pub folder_name: String,
     #[serde(default)]
     pub version: String,
+    #[serde(rename = "automatic-version-check", default)]
+    automatic_version_check: bool,
 }
 
 #[tauri::command]
