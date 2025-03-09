@@ -358,6 +358,15 @@
 		transition: all 0.2s ease;
 	}
 
+	.delete-button:hover {
+		background: #d4524a;
+		transform: translateY(-2px);
+	}
+
+	.delete-button:active {
+		transform: translateY(1px);
+	}
+
 	.download-button:disabled,
 	.update-button:disabled {
 		opacity: 0.8;
