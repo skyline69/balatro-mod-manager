@@ -22,8 +22,13 @@
 	let { mod, oninstallclick, onuninstallclick, onmodclick }: Props = $props();
 
 	// Check if an update is available when component mounts
+	let updateChecked = false;
+
 	$effect(() => {
-		checkForUpdate(mod.title);
+		if (!updateChecked) {
+			updateChecked = true;
+			checkForUpdate(mod.title);
+		}
 	});
 
 	async function checkForUpdate(modName: string) {
