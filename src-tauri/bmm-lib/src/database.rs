@@ -25,11 +25,33 @@ impl Database {
         let balatro_dir = config_dir.join("Balatro");
         let storage_path = balatro_dir.join("bmm_storage.db");
 
+
         // Create directory if it doesn't exist
         if !balatro_dir.exists() {
             std::fs::create_dir_all(&balatro_dir).map_err(|e| {
                 AppError::DirNotFound(format!("Failed to create config directory: {}", e).into())
             })?;
+        let conn =
+            Connection::open(&storage_path).map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
+        if !db_exists {
+            Self::initialize_database(&conn)?;
+        // Create the Balatro config directory if it doesn't exist
+        let balatro_dir = config_dir.join("Balatro");
+        std::fs::create_dir_all(&balatro_dir).map_err(|e| AppError::DirCreate {
+            path: balatro_dir.clone(),
+            source: e.to_string(),
+        })?;
+
+        let storage_path = balatro_dir.join("bmm_storage.db");
+
+        // Now check if the database exists and open it
+        let db_exists = storage_path.exists();
+        let conn =
+            Connection::open(&storage_path).map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
+        if !db_exists {
+            Self::initialize_database(&conn)?;
         }
 
         // Try to open the database with a retry mechanism
