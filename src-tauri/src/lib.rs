@@ -16,6 +16,7 @@ use zip::ZipArchive;
 //
 use std::collections::HashSet;
 use std::fs::File;
+// use std::panic;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -987,7 +988,115 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         log::debug!("Launched game from {}", exe_path.display());
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        // Ensure version.dll exists in the game directory
+        let dll_path = path.join("version.dll");
+        if !dll_path.exists() {
+            lovely::ensure_version_dll_exists(&path).await?;
+        }
+
+        // Try to launch through Steam first (preferred method for Proton)
+        let app_id = "2379780"; // Balatro's Steam AppID
+
+        // Try with steam URL protocol first
+        let url_result = Command::new("xdg-open")
+            .arg(format!("steam://run/{}", app_id))
+            .spawn();
+
+        if url_result.is_ok() {
+            log::debug!("Launched Balatro through Steam URL protocol");
+            return Ok(());
+        }
+
+        // Try with Steam executable directly as fallback
+        let steam_result = which::which("steam").map(|steam_path| {
+            let mut command = Command::new(steam_path);
+            if !lovely_console_enabled {
+                // Pass console disable flag through Steam launch options
+                command.args(["-applaunch", app_id, "--", "--disable-console"]);
+            } else {
+                command.args(["-applaunch", app_id]);
+            }
+            command.spawn()
+        });
+
+        if let Ok(Ok(_)) = steam_result {
+            log::debug!("Launched Balatro through Steam executable");
+            return Ok(());
+        }
+
+        // Last resort: try direct launch with WINEDLLOVERRIDES
+        let exe_path = find_executable_in_directory(&path)
+            .ok_or_else(|| format!("No executable found in {}", path.display()))?;
+
+        let mut command = Command::new(&exe_path);
+        command
+            .current_dir(&path)
+            .env("WINEDLLOVERRIDES", "version=n,b");
+
+        if !lovely_console_enabled {
+            command.arg("--disable-console");
+        }
+
+        command
+            .spawn()
+            .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
+
+        log::debug!("Launched Balatro directly with WINEDLLOVERRIDES");
+    }
+
     Ok(())
+}
+
+// Add this helper function for Linux if it doesn't exist already
+#[cfg(target_os = "linux")]
+fn find_executable_in_directory(dir: &PathBuf) -> Option<PathBuf> {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut executables: Vec<PathBuf> = Vec::new();
+
+        // Collect all executable files
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_file() {
+                // Check if file is executable on Linux
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    use std::os::unix::fs::PermissionsExt;
+                    let permissions = metadata.permissions();
+                    if permissions.mode() & 0o111 != 0 {
+                        executables.push(path);
+                    }
+                }
+            }
+        }
+
+        if executables.is_empty() {
+            return None;
+        }
+
+        // First look for any executable with "balatro" in the name
+        for exe in &executables {
+            if let Some(file_name) = exe.file_name().and_then(|n| n.to_str()) {
+                if file_name.to_lowercase().contains("balatro") {
+                    return Some(exe.clone());
+                }
+            }
+        }
+
+        // Then look for "love" executable
+        for exe in &executables {
+            if let Some(file_name) = exe.file_name().and_then(|n| n.to_str()) {
+                if file_name.to_lowercase() == "love" {
+                    return Some(exe.clone());
+                }
+            }
+        }
+
+        // If no specific executable was found, return the first one
+        return Some(executables[0].clone());
+    }
+
+    None
 }
 
 #[cfg(target_os = "windows")]
@@ -1589,13 +1698,7 @@ async fn set_background_state(
 
 #[tauri::command]
 async fn verify_path_exists(path: String) -> bool {
-    match std::fs::exists(PathBuf::from(path)) {
-        Ok(exists) => exists,
-        Err(e) => {
-            log::error!("Failed to check path existence: {}", e);
-            false
-        }
-    }
+    PathBuf::from(path).exists()
 }
 
 #[tauri::command]
@@ -1637,6 +1740,11 @@ async fn check_custom_balatro(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Set up panic hook with proper logging
+    // panic::set_hook(Box::new(|panic_info| {
+    //     log::error!("Application crashed: {:?}", panic_info);
+    // }));
+
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             app.emit("single-instance", Payload { args: argv, cwd })

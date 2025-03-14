@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::fs::File;
 #[cfg(target_os = "macos")]
 use std::fs::{self, File};
@@ -9,7 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub async fn ensure_version_dll_exists(game_path: &PathBuf) -> Result<PathBuf, AppError> {
     let dll_path = game_path.join("version.dll");
 
@@ -107,7 +107,22 @@ pub async fn ensure_lovely_exists() -> Result<PathBuf, AppError> {
         Ok(game_path.join("Balatro.exe"))
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        let balatro_paths = crate::finder::get_balatro_paths();
+        if balatro_paths.is_empty() {
+            return Err(AppError::DirNotFound(PathBuf::from("Balatro installation")));
+        }
+
+        // Ensure version.dll exists in the game directory
+        let game_path = &balatro_paths[0];
+        ensure_version_dll_exists(game_path).await?;
+
+        // For Linux/Proton, we return the path to version.dll
+        Ok(game_path.join("version.dll"))
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         Err(AppError::InvalidState(
             "Lovely injection is not supported on this platform.".into(),
@@ -180,7 +195,7 @@ async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError>
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
     let temp_dir = tempfile::tempdir().map_err(|e| AppError::FileWrite {
         path: PathBuf::from("temp directory"),
@@ -190,7 +205,11 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
     // URL to the latest version.dll in the lovely injector repository
     let url = "https://github.com/ethangreen-dev/lovely-injector/releases/latest/download/lovely-x86_64-pc-windows-msvc.zip";
 
+    #[cfg(target_os = "windows")]
     log::info!("Downloading lovely injector for Windows from {}", url);
+    
+    #[cfg(target_os = "linux")]
+    log::info!("Downloading lovely injector for Linux/Proton from {}", url);
 
     // Download the ZIP file
     let client = reqwest::Client::new();
@@ -266,3 +285,4 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
 
     Ok(())
 }
+
