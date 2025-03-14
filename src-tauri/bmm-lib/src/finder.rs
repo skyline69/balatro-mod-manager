@@ -8,12 +8,11 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use std::path::PathBuf;
 #[cfg(target_os = "windows")]
+use sysinfo::System;
+#[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
-#[cfg(target_os = "windows")]
-use sysinfo::{System};
-
 
 #[cfg(target_os = "windows")]
 fn read_path_from_registry() -> Result<String, std::io::Error> {
@@ -105,13 +104,14 @@ pub fn is_steam_running() -> bool {
     #[cfg(target_os = "windows")]
     {
         let system = System::new_all();
-        let x= system.processes_by_exact_name(std::ffi::OsStr::new("steam.exe"))
+        let x = system
+            .processes_by_exact_name(std::ffi::OsStr::new("steam.exe"))
             .next()
             .is_some();
         x
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(target_os = "macos")]
     {
         use libproc::proc_pid::name;
         use libproc::processes;
@@ -125,6 +125,26 @@ pub fn is_steam_running() -> bool {
                 }
             }
         }
+        false
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::ffi::OsStr;
+        let system = sysinfo::System::new_all();
+        // On Linux, check for several possible Steam process names
+        let steam_process_names = vec![
+            OsStr::new("steam"),
+            OsStr::new("steamwebhelper"),
+            OsStr::new("steamwebhelper.exe"),
+        ];
+
+        for name in steam_process_names {
+            if system.processes_by_name(name).next().is_some() {
+                return true;
+            }
+        }
+
         false
     }
 }
@@ -164,13 +184,14 @@ pub fn is_balatro_running() -> bool {
     #[cfg(target_os = "windows")]
     {
         let system = System::new_all();
-        let x = system.processes_by_exact_name(std::ffi::OsStr::new("Balatro.exe"))
+        let x = system
+            .processes_by_exact_name(std::ffi::OsStr::new("Balatro.exe"))
             .next()
             .is_some();
         x
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(target_os = "macos")]
     {
         use libproc::proc_pid::name;
         use libproc::processes;
@@ -187,6 +208,26 @@ pub fn is_balatro_running() -> bool {
                 }
             }
         }
+        false
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::ffi::OsStr;
+        let system = sysinfo::System::new_all();
+        // On Linux, check for several possible Balatro process names
+        let balatro_process_names = vec![
+            OsStr::new("Balatro"),
+            OsStr::new("Balatro.exe"),
+            OsStr::new("love"),
+        ];
+
+        for name in balatro_process_names {
+            if system.processes_by_name(name).next().is_some() {
+                return true;
+            }
+        }
+
         false
     }
 }
