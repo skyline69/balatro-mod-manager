@@ -14,7 +14,11 @@
 		"core:event:default",
 		"core:window:allow-show",
 		"core:window:allow-set-focus",
-		"window-state:default"
+		"window-state:default",
+		"fs:create-app-specific-dirs",
+		"core:event:allow-listen",
+		"core:event:default",
+		"fs:create-app-specific-dirs"
 	],
-	"platforms": ["windows", "macOS"]
+	"platforms": ["windows", "macOS", "linux"]
 }
