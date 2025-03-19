@@ -52,10 +52,10 @@ open Powershell & run this command:
 iwr https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.ps1 -useb | iex
 ```
 
-### For macOS
+### For macOS & Linux
 run this command:
 ```bash
-curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts/install.sh | bash
+curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/heads/66-linux-support/scripts/install.sh | bash
 ```
 
 ## Manual Installation
@@ -73,6 +73,10 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/sc
     - For macOS:
         ```sh
         task release-macos
+        ```
+    - For Linux:
+        ```sh
+        task release-linux
         ```
 
 ## Running the Project
@@ -92,7 +96,7 @@ To build the project for production:
 
 1. Build the release target (`release-windows` for Windows, `release-macos` for macOS):
     ```sh
-    task release-windows # or task release-macos
+    task release-windows # or task release-macos / release-linux
     ```
 
 
