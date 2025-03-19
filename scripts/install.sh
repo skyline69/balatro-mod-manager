@@ -23,12 +23,6 @@ echo -e "${GREEN}Balatro Mod Manager Builder${NC}"
 echo "----------------------------------------"
 echo "Build started at $(date)"
 
-# Check if running on macOS
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo -e "${RED}Error: This builder is for macOS only.${NC}"
-    exit 1
-fi
-
 # Check for required tools
 echo "Checking dependencies..."
 
