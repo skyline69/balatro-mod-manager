@@ -114,6 +114,10 @@ rm -rf "${BUILD_DIR}"
 
 echo -e "${GREEN}Installation completed successfully!${NC}"
 echo
-echo -e "${YELLOW}Note: Security dialog might appear on first launch${NC}"
+
+# Check if running on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	echo -e "${YELLOW}Note: Security dialog might appear on first launch${NC}"
+fi
 
 exit 0
