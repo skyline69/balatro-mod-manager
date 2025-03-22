@@ -8,7 +8,7 @@ tasks:
   debug:
     desc: Start development server
     cmds:
-      - cmd: GDK_BACKEND=x11 cargo tauri dev
+      - cmd: cargo tauri dev
 
   default:
     - task: debug
@@ -37,7 +37,7 @@ tasks:
   release-linux:
     desc: Linux production build
     cmds:
-      - cmd: NO_STRIP=true GDK_BACKEND=x11 cargo tauri build --target x86_64-unknown-linux-gnu --verbose
+      - cmd: NO_STRIP=true cargo tauri build --target x86_64-unknown-linux-gnu --verbose
 
   release-macos-production:
     desc: Signed macOS build
