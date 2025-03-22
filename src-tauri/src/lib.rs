@@ -1000,11 +1000,30 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         let app_id = "2379780"; // Balatro's Steam AppID
 
         // Try with steam URL protocol first
-        let url_result = Command::new("xdg-open")
-            .arg(format!("steam://run/{}", app_id))
-            .spawn();
+        let url_handler = Command::new("xdg-mime")
+            .arg("query")
+            .arg("default")
+            .arg("x-scheme-handler/steam")
+            .output()
+            .map_err(|e| format!("Failed to query `steam://` handler: {}", e))
+            .and_then(|output| {
+                let output = String::from_utf8_lossy(&output.stdout);
+                if output.trim().is_empty() {
+                    return Err("No default `steam://` handler found".to_string());
+                }
+                if output.trim() != "steam.desktop" {
+                    log::warn!(
+                        "The system's default `steam://` handler is {} instead of steam",
+                        output
+                    );
+                }
+                Ok(())
+            });
 
-        if url_result.is_ok() {
+        if url_handler.is_ok() {
+            let _ = Command::new("xdg-open")
+                .arg(format!("steam://run/{}", app_id))
+                .spawn();
             log::debug!("Launched Balatro through Steam URL protocol");
             return Ok(());
         }
