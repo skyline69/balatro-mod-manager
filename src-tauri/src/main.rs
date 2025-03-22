@@ -12,6 +12,14 @@ fn main() {
     if let Err(e) = bmm_lib::logging::init_logger() {
         eprintln!("Failed to initialize logging: {}", e);
     }
+
+    #[cfg(target_os = "linux")]
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+
     balatro_mod_manager_lib::run();
+
+    #[cfg(target_os = "linux")]
+    std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE");
+
     log::logger().flush();
 }
