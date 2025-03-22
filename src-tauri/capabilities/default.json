@@ -9,7 +9,9 @@
 		"dialog:default",
 		"fs:default",
 		"fs:read-app-specific-dirs-recursive",
-		"fs:create-app-specific-dirs"
+		"fs:create-app-specific-dirs",
+		"core:event:default",
+		"core:event:allow-listen"
 	],
 	"platforms": ["windows", "macOS", "linux"]
 }
