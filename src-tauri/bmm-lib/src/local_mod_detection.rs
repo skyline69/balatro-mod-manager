@@ -1,5 +1,6 @@
 use crate::cache;
 use crate::database::Database;
+use crate::finder::get_lovely_mods_dir;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -115,10 +116,7 @@ pub fn detect_manual_mods(
     db: &Database,
     cached_catalog_mods: &[cache::Mod],
 ) -> Result<Vec<DetectedMod>, String> {
-    let config_dir =
-        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
-
-    let mod_dir = config_dir.join("Balatro").join("Mods");
+    let mod_dir = get_lovely_mods_dir();
 
     if !mod_dir.exists() {
         return Ok(Vec::new());

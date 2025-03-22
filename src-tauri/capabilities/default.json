@@ -18,7 +18,9 @@
 		"fs:create-app-specific-dirs",
 		"core:event:allow-listen",
 		"core:event:default",
-		"fs:create-app-specific-dirs"
+		"fs:create-app-specific-dirs",
+		"core:event:default",
+		"core:event:allow-listen"
 	],
 	"platforms": ["windows", "macOS", "linux"]
 }

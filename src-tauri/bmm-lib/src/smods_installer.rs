@@ -1,11 +1,10 @@
+use crate::finder::get_lovely_mods_dir;
 use anyhow::{anyhow, Context, Result};
-use dirs;
 use log::info;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Cursor;
-use std::path::PathBuf;
 use tokio::fs as tokio_fs;
 use zip::ZipArchive;
 
@@ -76,37 +75,23 @@ impl ModInstaller {
     }
 
     pub fn is_installed(&self) -> bool {
-        match self.get_installation_path() {
-            Ok(path) => fs::read_dir(path)
-                .map(|mut entries| {
-                    entries.any(|e| {
-                        e.ok()
-                            .map(|entry| {
-                                let binding = entry.file_name();
-                                let name = binding.to_str().unwrap_or("");
-                                match self.mod_type {
-                                    ModType::Steamodded => name.starts_with("Steamodded-smods-"),
-                                    ModType::Talisman => name.contains("Talisman"),
-                                }
-                            })
-                            .unwrap_or(false)
-                    })
+        let path = get_lovely_mods_dir();
+        fs::read_dir(path)
+            .map(|mut entries| {
+                entries.any(|e| {
+                    e.ok()
+                        .map(|entry| {
+                            let binding = entry.file_name();
+                            let name = binding.to_str().unwrap_or("");
+                            match self.mod_type {
+                                ModType::Steamodded => name.starts_with("Steamodded-smods-"),
+                                ModType::Talisman => name.contains("Talisman"),
+                            }
+                        })
+                        .unwrap_or(false)
                 })
-                .unwrap_or(false),
-            Err(_) => false,
-        }
-    }
-
-    fn get_installation_path(&self) -> Result<PathBuf> {
-        // Construct the mods path
-        let mod_path = dirs::config_dir()
-            .context("Failed to get config directory")?
-            .join("Balatro")
-            .join("Mods");
-
-        // dbg!(&mod_path);
-
-        Ok(mod_path)
+            })
+            .unwrap_or(false)
     }
 
     pub async fn get_latest_release(&self) -> Result<String> {
@@ -165,7 +150,7 @@ impl ModInstaller {
     }
 
     pub async fn install_version(&self, version: &str) -> Result<String> {
-        let installation_path = self.get_installation_path()?;
+        let installation_path = get_lovely_mods_dir();
 
         match self.mod_type {
             ModType::Steamodded => {
@@ -275,15 +260,16 @@ impl ModInstaller {
                         std::io::copy(&mut file, &mut outfile)?;
                     }
                 }
-                Ok(installation_path.join("Talisman").to_string_lossy().to_string())
+                Ok(installation_path
+                    .join("Talisman")
+                    .to_string_lossy()
+                    .to_string())
             }
         }
     }
 
     pub async fn uninstall(&self) -> Result<()> {
-        let installation_path = self.get_installation_path()?;
-        let mods_dir = installation_path.join("Mods");
-
+        let mods_dir = get_lovely_mods_dir();
         if !mods_dir.exists() {
             info!("Mods directory not found");
             return Ok(());

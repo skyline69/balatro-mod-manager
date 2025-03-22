@@ -1,4 +1,5 @@
 use crate::errors::AppError;
+use crate::finder::get_lovely_mods_dir;
 use flate2::read::GzDecoder;
 use reqwest::Client;
 use std::fs;
@@ -32,10 +33,7 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
         .ok_or_else(|| AppError::InvalidState("Unknown file type".into()))?
         .mime_type();
 
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
+    let mod_dir = get_lovely_mods_dir();
 
     let mod_name = {
         if let Some(name) = folder_name.filter(|n| !n.is_empty()) {
@@ -330,11 +328,7 @@ fn ensure_safe_path(base: &Path, path: &Path) -> Result<(), AppError> {
 pub fn uninstall_mod(path: PathBuf) -> Result<(), AppError> {
     log::info!("Uninstalling mod: {:?}", path);
 
-    let mods_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
-
+    let mods_dir = get_lovely_mods_dir();
     validate_uninstall_path(&path, &mods_dir)?;
 
     if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {

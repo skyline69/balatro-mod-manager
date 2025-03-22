@@ -33,6 +33,7 @@ use bmm_lib::database::Database;
 use bmm_lib::database::InstalledMod;
 use bmm_lib::discord_rpc::DiscordRpcManager;
 use bmm_lib::errors::AppError;
+use bmm_lib::finder::get_lovely_mods_dir;
 use bmm_lib::finder::is_balatro_running;
 use bmm_lib::finder::is_steam_running;
 use bmm_lib::local_mod_detection;
@@ -352,21 +353,14 @@ async fn check_untracked_mods() -> Result<bool, String> {
 
 #[tauri::command]
 async fn get_mods_folder() -> Result<String, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
-    Ok(config_dir
-        .join("Balatro")
-        .join("Mods")
-        .to_string_lossy()
-        .into_owned())
+    let mods_dir = get_lovely_mods_dir();
+    Ok(mods_dir.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 async fn process_dropped_file(path: String) -> Result<String, String> {
     // Get the mods directory path
-    let config_dir =
-        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
-    let mods_dir = config_dir.join("Balatro").join("Mods");
+    let mods_dir = get_lovely_mods_dir();
 
     // Create the mods directory if it doesn't exist
     fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
@@ -483,9 +477,7 @@ fn check_for_lua_files(dir: &PathBuf) -> Result<bool, String> {
 #[tauri::command]
 fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String> {
     // Get the mods directory path
-    let config_dir =
-        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
-    let mods_dir = config_dir.join("Balatro").join("Mods");
+    let mods_dir = get_lovely_mods_dir();
 
     // Create the mods directory if it doesn't exist
     fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
@@ -805,10 +797,7 @@ fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> 
 
 #[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mod_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")))?
-        .join("Balatro")
-        .join("Mods");
+    let mod_dir = get_lovely_mods_dir();
 
     let db = state
         .db
@@ -1280,10 +1269,7 @@ async fn delete_manual_mod(path: String) -> Result<(), String> {
         ));
     }
 
-    let config_dir =
-        dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
-
-    let mods_dir = config_dir.join("Balatro").join("Mods");
+    let mods_dir = get_lovely_mods_dir();
 
     // Security check: Make sure the path is within the Mods directory
     let canonicalized_path = match path.canonicalize() {
