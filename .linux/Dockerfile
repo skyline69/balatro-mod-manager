@@ -20,7 +20,7 @@ FROM base AS builder
 WORKDIR /app/src
 COPY . .
 RUN bun i
-RUN NO_STRIP=true bun tauri build --target x86_64-unknown-linux-gnu --verbose
+RUN bun tauri build --target x86_64-unknown-linux-gnu --verbose
 
 
 FROM ubuntu AS output
