@@ -1,0 +1,6 @@
+Dockerfile
+*.Dockerfile
+.dockerignore
+/src-tauri/target
+/src-tauri/gen/schemas
+/src-tauri/storage.db
