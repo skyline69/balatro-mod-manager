@@ -78,8 +78,21 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/he
 
         - using docker (recommended):
 
-          ```sh
-          ./.linux/bundle.sh
+          **Prerequisites**: Ensure you have Docker, Docker Compose, and Docker Buildx installed:
+          ```
+          # For Arch Linux
+          sudo pacman -S docker docker-compose docker-buildx
+
+          # For Ubuntu/Debian
+          sudo apt install docker.io docker-compose docker-buildx-plugin
+
+          # For Fedora/RHEL
+          sudo dnf install docker docker-compose docker-buildx-plugin
+          ```
+
+          Then build with:
+          ```
+          sudo ./.linux/bundle.sh
           ls ./.linux/bundles/*/ # will list the available rpm, deb & appimage bundles
           ```
 
