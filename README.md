@@ -75,9 +75,20 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/he
         task release-macos
         ```
     - For Linux:
-        ```sh
-        task release-linux
-        ```
+
+        - using docker (recommended):
+
+          ```sh
+          ./.linux/bundle.sh
+          ls ./.linux/bundles/*/ # will list the available rpm, deb & appimage bundles
+          ```
+
+        - without docker (debian based only):
+
+          ```sh
+          ./.linux/install-deps.sh
+          task release-linux
+          ```
 
 ## Running the Project
 
