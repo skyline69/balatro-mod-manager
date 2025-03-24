@@ -9,7 +9,7 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /scripts/build_for_release.sh
-/.linux/bundles
+/.hack/linux/bundles
 
 /src-tauri/target
 /src-tauri/gen/schemas
@@ -27,3 +27,8 @@ CODE_OF_CONDUCT.md
 LICENSE
 README.md
 Taskfile.yml
+flake.nix
+flake.lock
+/result
+/.hack/pnpm-lock.yaml
+/.hack/linux/bundle.sh

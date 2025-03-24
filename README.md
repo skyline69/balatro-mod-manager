@@ -53,9 +53,18 @@ iwr https://raw.githubusercontent.com/skyline69/balatro-mod-manager/main/scripts
 ```
 
 ### For macOS & Linux
-run this command:
-```bash
+
+using the install script:
+
+```sh
 curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/heads/66-linux-support/scripts/install.sh | bash
+```
+
+or with the Nix package manager:
+<!-- the darwin package wasn't tested -->
+
+```sh
+nix run github:skyline69/balatro-mod-manager
 ```
 
 ## Manual Installation
@@ -92,14 +101,14 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/he
 
           Then build with:
           ```
-          sudo ./.linux/bundle.sh
-          ls ./.linux/bundles/*/ # will list the available rpm, deb & appimage bundles
+          sudo ./.hack/linux/bundle.sh
+          ls ./.hack/linux/bundles/*/ # will list the available rpm, deb & appimage bundles
           ```
 
         - without docker (debian based only):
 
           ```sh
-          ./.linux/install-deps.sh
+          ./.hack/linux/install-deps.sh
           task release-linux
           ```
 
