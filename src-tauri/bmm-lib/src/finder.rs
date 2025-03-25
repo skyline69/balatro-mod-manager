@@ -102,6 +102,7 @@ pub fn get_lovely_mods_dir() -> PathBuf {
         path.push("AppData");
         path.push("Roaming");
         path.push("Balatro");
+        path.push("Mods");
         path
     }
     #[cfg(not(target_os = "linux"))]
