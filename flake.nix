@@ -37,23 +37,24 @@
           pname = cargo-toml.package.name;
           version = cargo-toml.package.version;
 
+          patchPhase = ''
+            # allow pnpm, upstreamed to nixpkgs master
+            cp ${pkgs.writeText "${pname}-${version}-package.json" (
+              builtins.toJSON (
+                (pkgs.lib.importJSON "${src}/package.json") // {packageManager = null;}
+              )
+            )} package.json
+
+            cp ${./.hack/pnpm-lock.yaml} pnpm-lock.yaml
+          '';
+
           mainProgram =
             # fallback to null in order to crash if no main binary found
             (pkgs.lib.lists.findFirst (f: f.path == "src/main.rs") null cargo-toml.bin).name;
         in
           pkgs.rustPlatform.buildRustPackage {
-            inherit src pname version;
+            inherit src pname version patchPhase;
             doCheck = false;
-            patchPhase = ''
-              # allow pnpm, upstreamed to nixpkgs master
-              cp ${pkgs.writeText "${pname}-${version}-package.json" (
-                builtins.toJSON (
-                  (pkgs.lib.importJSON "${src}/package.json") // {packageManager = null;}
-                )
-              )} package.json
-
-              cp ${./.hack/pnpm-lock.yaml} pnpm-lock.yaml
-            '';
 
             buildAndTestSubdir = "src-tauri";
             cargoRoot = "src-tauri";
@@ -64,7 +65,7 @@
 
             # using pnpm to fetch deps and bun to build, since nix doesn't have a bun fetcher
             pnpmDeps = pkgs.pnpm.fetchDeps {
-              inherit src pname version;
+              inherit src pname version patchPhase;
               hash = "sha256-faofv1ReGaS1sHiHHBrN/2QA8aPhxj01ZtSjkBALs9E=";
             };
 
