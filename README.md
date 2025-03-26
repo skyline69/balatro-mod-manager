@@ -63,9 +63,17 @@ curl -sL https://raw.githubusercontent.com/skyline69/balatro-mod-manager/refs/he
 or with the Nix package manager:
 <!-- the darwin package wasn't tested -->
 
-```sh
-nix run github:skyline69/balatro-mod-manager
-```
+- with flakes (recommended):
+
+  ```sh
+  nix run github:skyline69/balatro-mod-manager/66-linux-support --extra-experimental-features 'nix-command flakes' # TODO: remove `/66-linux-support` after merging to main
+  ```
+
+- without flakes:
+
+  ```sh
+  nix-build -E 'import (fetchTarball "https://github.com/janw4ld/balatro-mod-manager/archive/66-linux-support-upstream.tar.gz")' && ./result/bin/BMM # TODO: change to `skyline69/balatro-mod-manager/archive/main.tar.gz` after merging to main
+  ```
 
 ## Manual Installation
 

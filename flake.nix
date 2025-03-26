@@ -2,11 +2,12 @@
   nixConfig.bash-prompt-prefix = ''(BMM) '';
 
   inputs = {
-    flake-utils.url = "github:numtide/flake-utils";
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    flake-utils.url = "github:numtide/flake-utils";
+    flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   };
@@ -16,6 +17,7 @@
     nixpkgs,
     flake-utils,
     gitignore,
+    ...
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let

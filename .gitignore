@@ -10,3 +10,4 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /scripts/build_for_release.sh
 /.hack/linux/bundles
+result
