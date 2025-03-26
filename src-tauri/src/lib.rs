@@ -958,7 +958,9 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
 
         // If version.dll doesn't exist, download it
         if !dll_path.exists() {
-            lovely::ensure_version_dll_exists(&path).await?;
+            lovely::ensure_version_dll_exists(&path)
+                .await
+                .inspect_err(|_| log::error!("Failed to install `lovely`"))?;
         }
 
         // Launch the game
@@ -983,7 +985,9 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         // Ensure version.dll exists in the game directory
         let dll_path = path.join("version.dll");
         if !dll_path.exists() {
-            lovely::ensure_version_dll_exists(&path).await?;
+            lovely::ensure_version_dll_exists(&path)
+                .await
+                .inspect_err(|_| log::error!("Failed to install `lovely`"))?;
         }
 
         // Try to launch through Steam first (preferred method for Proton)

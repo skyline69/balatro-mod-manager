@@ -10,15 +10,37 @@ use std::path::Path;
 use std::path::PathBuf;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-pub async fn ensure_version_dll_exists(game_path: &PathBuf) -> Result<PathBuf, AppError> {
+pub async fn ensure_version_dll_exists(game_path: &PathBuf) -> Result<Option<PathBuf>, AppError> {
     let dll_path = game_path.join("version.dll");
 
     // If the DLL doesn't exist, download it
     if !dll_path.exists() {
-        download_version_dll(&dll_path).await?;
+        let mut outfile = match File::create(&dll_path) {
+            Ok(f) => f,
+            Err(e) => {
+                #[cfg(target_os = "linux")]
+                if let Some(errno) = e.raw_os_error() {
+                    if errno == /* (30) - Read-only filesystem */ libc::EROFS
+                        || errno == /* (13) - Permission denied */ libc::EACCES
+                    {
+                        log::error!(
+                                "Failed to create file '{}', path not writable ({}). This error will be ignored and you have to manually install lovely instead.",
+                                dll_path.display(),
+                                errno,
+                            );
+                        return Ok(None);
+                    }
+                }
+                return Err(AppError::FileWrite {
+                    path: dll_path.to_path_buf(),
+                    source: e.to_string(),
+                });
+            }
+        };
+        download_version_dll(&mut outfile).await?;
     }
 
-    Ok(dll_path)
+    Ok(Some(dll_path))
 }
 
 #[cfg(target_os = "macos")]
@@ -196,7 +218,7 @@ async fn download_and_install_lovely(target_path: &Path) -> Result<(), AppError>
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
+async fn download_version_dll(outfile: &mut File) -> Result<(), AppError> {
     let temp_dir = tempfile::tempdir().map_err(|e| AppError::FileWrite {
         path: PathBuf::from("temp directory"),
         source: e.to_string(),
@@ -207,7 +229,7 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
 
     #[cfg(target_os = "windows")]
     log::info!("Downloading lovely injector for Windows from {}", url);
-    
+
     #[cfg(target_os = "linux")]
     log::info!("Downloading lovely injector for Linux/Proton from {}", url);
 
@@ -248,7 +270,6 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
     })?;
 
     // Find and extract version.dll from the ZIP
-    let mut found_dll = false;
     for i in 0..archive.len() {
         let mut file = match archive.by_index(i) {
             Ok(file) => file,
@@ -262,27 +283,12 @@ async fn download_version_dll(target_path: &PathBuf) -> Result<(), AppError> {
 
         if entry_name.ends_with("version.dll") {
             log::info!("Found version.dll in zip archive");
-            let mut outfile = File::create(target_path).map_err(|e| AppError::FileWrite {
-                path: target_path.to_path_buf(),
-                source: e.to_string(),
-            })?;
-
-            std::io::copy(&mut file, &mut outfile).map_err(|e| AppError::FileWrite {
-                path: target_path.to_path_buf(),
-                source: e.to_string(),
-            })?;
-
-            found_dll = true;
-            break;
+            std::io::copy(&mut file, outfile)?;
+            return Ok(());
         }
     }
 
-    if !found_dll {
-        return Err(AppError::InvalidState(
-            "version.dll not found in downloaded zip".to_string(),
-        ));
-    }
-
-    Ok(())
+    return Err(AppError::InvalidState(
+        "version.dll not found in downloaded zip".to_string(),
+    ));
 }
-
