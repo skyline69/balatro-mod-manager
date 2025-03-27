@@ -11,15 +11,15 @@ vite.config.ts.timestamp-*
 /scripts/build_for_release.sh
 /.hack/linux/bundles
 
-/src-tauri/target
-/src-tauri/gen/schemas
-/src-tauri/storage.db
+/src-tauri/**/target
+/src-tauri/**/gen/schemas
+/src-tauri/**/storage.db
 
 .git
 .github
 .vscode
-Dockerfile
-*.Dockerfile
+**/*/Dockerfile
+**/*/*.Dockerfile
 .dockerignore
 .gitignore
 .npmrc
@@ -29,6 +29,10 @@ README.md
 Taskfile.yml
 flake.nix
 flake.lock
+shell.nix
+default.nix
 /result
 /.hack/pnpm-lock.yaml
 /.hack/linux/bundle.sh
+/scripts/
+/version_updater/
