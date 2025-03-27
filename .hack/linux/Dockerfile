@@ -3,7 +3,7 @@ FROM ubuntu:noble@sha256:72297848456d5d37d1262630108ab308d3e9ec7ed1c3286a32fe098
 
 FROM ubuntu AS base
 
-COPY .linux/install-deps.sh .
+COPY .hack/linux/install-deps.sh .
 RUN ./install-deps.sh && apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
 
