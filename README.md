@@ -98,13 +98,13 @@ or with the Nix package manager:
           **Prerequisites**: Ensure you have Docker, Docker Compose, and Docker Buildx installed:
           ```
           # For Arch Linux
-          sudo pacman -S docker docker-compose docker-buildx
+          sudo pacman -S docker docker-buildx
 
           # For Ubuntu/Debian
-          sudo apt install docker.io docker-compose docker-buildx-plugin
+          sudo apt install docker.io docker-buildx-plugin
 
           # For Fedora/RHEL
-          sudo dnf install docker docker-compose docker-buildx-plugin
+          sudo dnf install docker docker-buildx-plugin
           ```
 
           Then build with:
