@@ -3,7 +3,7 @@ FROM ubuntu:noble@sha256:72297848456d5d37d1262630108ab308d3e9ec7ed1c3286a32fe098
 
 FROM ubuntu AS base
 
-COPY .linux/install-deps.sh .
+COPY .hack/linux/install-deps.sh .
 RUN ./install-deps.sh && apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
 
@@ -20,14 +20,19 @@ FROM base AS builder
 WORKDIR /app/src
 COPY . .
 RUN bun i
-RUN bun tauri build --target x86_64-unknown-linux-gnu --verbose
+RUN \
+    --mount=type=cache,target=/app/src/src-tauri/target/ \
+    --mount=type=cache,target=/app/src/src-tauri/bmm-lib/target/ \
+    --mount=type=cache,target=/root/.cargo/registry/cache/git/db \
+    --mount=type=cache,target=/root/.cargo/registry/cache/registry/ \
+  bun tauri build --target x86_64-unknown-linux-gnu --verbose && \
+  mkdir /app/bundles && cp \
+    src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb \
+    src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm \
+    src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage \
+    /app/bundles
 
 
 FROM ubuntu AS output
 
-WORKDIR /app/bundles
-COPY --from=builder \
-  /app/src/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb \
-  /app/src/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm \
-  /app/src/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage \
-  ./
+COPY --from=builder /app/bundles /app/bundles
