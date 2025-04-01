@@ -75,7 +75,7 @@ impl ModInstaller {
     }
 
     pub fn is_installed(&self) -> bool {
-        let path = get_lovely_mods_dir();
+        let path = get_lovely_mods_dir(None);
         fs::read_dir(path)
             .map(|mut entries| {
                 entries.any(|e| {
@@ -150,7 +150,7 @@ impl ModInstaller {
     }
 
     pub async fn install_version(&self, version: &str) -> Result<String> {
-        let installation_path = get_lovely_mods_dir();
+        let installation_path = get_lovely_mods_dir(None);
 
         match self.mod_type {
             ModType::Steamodded => {
@@ -269,7 +269,7 @@ impl ModInstaller {
     }
 
     pub async fn uninstall(&self) -> Result<()> {
-        let mods_dir = get_lovely_mods_dir();
+        let mods_dir = get_lovely_mods_dir(None);
         if !mods_dir.exists() {
             info!("Mods directory not found");
             return Ok(());

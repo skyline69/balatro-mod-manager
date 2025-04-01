@@ -353,14 +353,14 @@ async fn check_untracked_mods() -> Result<bool, String> {
 
 #[tauri::command]
 async fn get_mods_folder() -> Result<String, String> {
-    let mods_dir = get_lovely_mods_dir();
+    let mods_dir = get_lovely_mods_dir(None);
     Ok(mods_dir.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 async fn process_dropped_file(path: String) -> Result<String, String> {
     // Get the mods directory path
-    let mods_dir = get_lovely_mods_dir();
+    let mods_dir = get_lovely_mods_dir(None);
 
     // Create the mods directory if it doesn't exist
     fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
@@ -477,7 +477,7 @@ fn check_for_lua_files(dir: &PathBuf) -> Result<bool, String> {
 #[tauri::command]
 fn process_mod_archive(filename: String, data: Vec<u8>) -> Result<String, String> {
     // Get the mods directory path
-    let mods_dir = get_lovely_mods_dir();
+    let mods_dir = get_lovely_mods_dir(None);
 
     // Create the mods directory if it doesn't exist
     fs::create_dir_all(&mods_dir).map_err(|e| format!("Failed to create mods directory: {}", e))?;
@@ -797,7 +797,7 @@ fn extract_tar_gz_from_memory(cursor: Cursor<Vec<u8>>, target_dir: &PathBuf) -> 
 
 #[tauri::command]
 async fn refresh_mods_folder(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mod_dir = get_lovely_mods_dir();
+    let mod_dir = get_lovely_mods_dir(None);
 
     let db = state
         .db
@@ -1181,7 +1181,11 @@ async fn check_existing_installation(
 
 #[allow(non_snake_case)]
 #[tauri::command]
-async fn install_mod(url: String, folderName: String) -> Result<PathBuf, String> {
+async fn install_mod(
+    state: tauri::State<'_, AppState>,
+    url: String,
+    folderName: String,
+) -> Result<PathBuf, String> {
     let folderName = {
         if folderName.is_empty() {
             None
@@ -1189,7 +1193,21 @@ async fn install_mod(url: String, folderName: String) -> Result<PathBuf, String>
             Some(folderName)
         }
     };
-    map_error(bmm_lib::installer::install_mod(url, folderName).await)
+
+    #[cfg(not(target_os = "linux"))]
+    return map_error(bmm_lib::installer::install_mod(None, url, folderName).await);
+
+    #[cfg(target_os = "linux")]
+    {
+        let installation_path = state
+            .db
+            .lock()
+            .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?
+            .get_installation_path()?;
+        return map_error(
+            bmm_lib::installer::install_mod(installation_path.as_ref(), url, folderName).await,
+        );
+    };
 }
 
 #[tauri::command]
@@ -1228,8 +1246,19 @@ async fn force_remove_mod(
     name: String,
     path: String,
 ) -> Result<(), String> {
-    map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(path)))?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
+
+    #[cfg(not(target_os = "linux"))]
+    map_error(bmm_lib::installer::uninstall_mod(None, PathBuf::from(path)))?;
+    #[cfg(target_os = "linux")]
+    {
+        let installation_path = db.get_installation_path()?;
+        map_error(bmm_lib::installer::uninstall_mod(
+            installation_path.as_ref(),
+            PathBuf::from(path),
+        ))?;
+    };
+
     map_error(db.remove_installed_mod(&name))
 }
 
@@ -1273,7 +1302,7 @@ async fn delete_manual_mod(path: String) -> Result<(), String> {
         ));
     }
 
-    let mods_dir = get_lovely_mods_dir();
+    let mods_dir = get_lovely_mods_dir(None);
 
     // Security check: Make sure the path is within the Mods directory
     let canonicalized_path = match path.canonicalize() {
@@ -1367,9 +1396,19 @@ async fn cascade_uninstall(
         to_uninstall.extend(dependents);
 
         // Perform actual uninstall
-        map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(
-            mod_details.path,
-        )))?;
+        #[cfg(not(target_os = "linux"))]
+        map_error(bmm_lib::installer::uninstall_mod(
+            None,
+            PathBuf::from(mod_details.path),
+        ))?;
+        #[cfg(target_os = "linux")]
+        {
+            let installation_path = db.get_installation_path()?;
+            map_error(bmm_lib::installer::uninstall_mod(
+                installation_path.as_ref(),
+                PathBuf::from(mod_details.path),
+            ))?;
+        };
         map_error(db.remove_installed_mod(&current))?;
     }
 
@@ -1405,7 +1444,17 @@ async fn remove_installed_mod(
         }
     }
 
-    map_error(bmm_lib::installer::uninstall_mod(PathBuf::from(path)))?;
+    #[cfg(not(target_os = "linux"))]
+    map_error(bmm_lib::installer::uninstall_mod(None, PathBuf::from(path)))?;
+    #[cfg(target_os = "linux")]
+    {
+        let installation_path = db.get_installation_path()?;
+        map_error(bmm_lib::installer::uninstall_mod(
+            installation_path.as_ref(),
+            PathBuf::from(path),
+        ))?;
+    };
+
     map_error(db.remove_installed_mod(&name))
 }
 

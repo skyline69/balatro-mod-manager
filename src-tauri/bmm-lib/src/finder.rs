@@ -85,25 +85,28 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     paths
 }
 
-pub fn get_lovely_mods_dir() -> PathBuf {
+pub fn get_lovely_mods_dir(
+    #[cfg(target_os = "linux")] installation_path: Option<&String>,
+) -> PathBuf {
     #[cfg(target_os = "linux")]
     {
-        // ~/.steam/steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro
-        let mut path = dirs::home_dir().unwrap();
-        path.push(".steam");
-        path.push("steam");
-        path.push("steamapps");
-        path.push("compatdata");
-        path.push("2379780");
-        path.push("pfx");
-        path.push("drive_c");
-        path.push("users");
-        path.push("steamuser");
-        path.push("AppData");
-        path.push("Roaming");
-        path.push("Balatro");
-        path.push("Mods");
-        path
+        // probably ~/.steam/steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro
+        let installation_path = PathBuf::from(installation_path.unwrap());
+
+        let prefix = match installation_path.ends_with("steamapps/common/Balatro/") {
+            true => installation_path
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .to_path_buf(),
+            false => {
+                let path = dirs::home_dir().unwrap();
+                path.join(".steam/steam/steamapps/")
+            }
+        };
+
+        prefix.join("compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/Mods")
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -186,7 +189,7 @@ pub fn get_installed_mods() -> Vec<String> {
     //     .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
     //     .to_path_buf();
 
-    let mod_dir = get_lovely_mods_dir();
+    let mod_dir = get_lovely_mods_dir(None);
 
     // dbg!(&mod_dir);
 

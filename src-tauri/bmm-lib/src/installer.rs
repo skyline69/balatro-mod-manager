@@ -10,7 +10,11 @@ use std::path::PathBuf;
 use tar::Archive;
 use zip::ZipArchive;
 
-pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<PathBuf, AppError> {
+pub async fn install_mod(
+    installation_path: Option<&String>,
+    url: String,
+    folder_name: Option<String>,
+) -> Result<PathBuf, AppError> {
     let client = Client::new();
     let response = client
         .get(&url)
@@ -33,7 +37,7 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
         .ok_or_else(|| AppError::InvalidState("Unknown file type".into()))?
         .mime_type();
 
-    let mod_dir = get_lovely_mods_dir();
+    let mod_dir = get_lovely_mods_dir(installation_path);
 
     let mod_name = {
         if let Some(name) = folder_name.filter(|n| !n.is_empty()) {
@@ -66,7 +70,7 @@ pub async fn install_mod(url: String, folder_name: Option<String>) -> Result<Pat
     let target_dir = mod_dir.join(&mod_name);
     if target_dir.exists() {
         log::info!("Uninstalling existing mod at: {:?}", target_dir);
-        uninstall_mod(target_dir.clone())?;
+        uninstall_mod(installation_path, target_dir.clone())?;
     }
 
     log::info!("Installing mod: {}", url);
@@ -325,11 +329,12 @@ fn ensure_safe_path(base: &Path, path: &Path) -> Result<(), AppError> {
     }
 }
 
-pub fn uninstall_mod(path: PathBuf) -> Result<(), AppError> {
+pub fn uninstall_mod(installation_path: Option<&String>, path: PathBuf) -> Result<(), AppError> {
     log::info!("Uninstalling mod: {:?}", path);
 
-    let mods_dir = get_lovely_mods_dir();
-    validate_uninstall_path(&path, &mods_dir)?;
+    let mods_dir = get_lovely_mods_dir(installation_path);
+    validate_uninstall_path(&path, &mods_dir)
+        .inspect_err(|e| log::error!("Uninstall path validation error: {}", e.to_string()))?;
 
     if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
         if dir_name.starts_with("Steamodded-smods-") {
