@@ -91,18 +91,16 @@ pub fn get_lovely_mods_dir(
 ) -> PathBuf {
     #[cfg(target_os = "linux")]
     {
-        // probably ~/.steam/steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro
-        let installation_path = PathBuf::from(installation_path.unwrap());
-
+        // probably ~/.steam/steam/steamapps/
         let prefix = {
+            let installation_path = installation_path.map_or(PathBuf::new(), PathBuf::from);
             if installation_path.ends_with("steamapps/common/Balatro/") {
-                let p = installation_path
+                installation_path
                     .parent()
                     .unwrap()
                     .parent()
                     .unwrap()
-                    .to_path_buf();
-                p
+                    .to_path_buf()
             } else {
                 dirs::home_dir().unwrap().join(".steam/steam/steamapps/")
             }
