@@ -190,9 +190,6 @@ pub fn get_installed_mods(installation_path: Option<&String>) -> Vec<String> {
     //     .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
     //     .to_path_buf();
 
-    #[cfg(not(target_os = "linux"))]
-    let mod_dir = get_lovely_mods_dir(None);
-    #[cfg(target_os = "linux")]
     let mod_dir = get_lovely_mods_dir(installation_path);
 
     // dbg!(&mod_dir);

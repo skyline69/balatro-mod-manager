@@ -77,9 +77,6 @@ impl ModInstaller {
     }
 
     pub fn is_installed(&self) -> bool {
-        #[cfg(not(target_os = "linux"))]
-        let mods_dir = get_lovely_mods_dir(None);
-        #[cfg(target_os = "linux")]
         let mods_dir = get_lovely_mods_dir(self.installation_path.as_ref());
 
         fs::read_dir(mods_dir)
