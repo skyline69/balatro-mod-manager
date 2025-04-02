@@ -37,6 +37,9 @@ pub async fn install_mod(
         .ok_or_else(|| AppError::InvalidState("Unknown file type".into()))?
         .mime_type();
 
+    #[cfg(not(target_os = "linux"))]
+    let mod_dir = get_lovely_mods_dir(None);
+    #[cfg(target_os = "linux")]
     let mod_dir = get_lovely_mods_dir(installation_path);
 
     let mod_name = {
@@ -332,7 +335,11 @@ fn ensure_safe_path(base: &Path, path: &Path) -> Result<(), AppError> {
 pub fn uninstall_mod(installation_path: Option<&String>, path: PathBuf) -> Result<(), AppError> {
     log::info!("Uninstalling mod: {:?}", path);
 
+    #[cfg(not(target_os = "linux"))]
+    let mods_dir = get_lovely_mods_dir(None);
+    #[cfg(target_os = "linux")]
     let mods_dir = get_lovely_mods_dir(installation_path);
+
     validate_uninstall_path(&path, &mods_dir)
         .inspect_err(|e| log::error!("Uninstall path validation error: {}", e.to_string()))?;
 
