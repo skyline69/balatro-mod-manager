@@ -87,22 +87,25 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
 
 pub fn get_lovely_mods_dir(
     #[cfg(target_os = "linux")] installation_path: Option<&String>,
+    #[cfg(not(target_os = "linux"))] _installation_path: Option<&String>,
 ) -> PathBuf {
     #[cfg(target_os = "linux")]
     {
         // probably ~/.steam/steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro
         let installation_path = PathBuf::from(installation_path.unwrap());
 
-        let prefix = match installation_path.ends_with("steamapps/common/Balatro/") {
-            true => installation_path
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .to_path_buf(),
-            false => {
-                let path = dirs::home_dir().unwrap();
-                path.join(".steam/steam/steamapps/")
+        let prefix = {
+            if installation_path.ends_with("steamapps/common/Balatro/") {
+                let p = installation_path
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_path_buf();
+                log::debug!("Assuming steam wineprefix: `{}`", p.to_string_lossy());
+                p
+            } else {
+                dirs::home_dir().unwrap().join(".steam/steam/steamapps/")
             }
         };
 
