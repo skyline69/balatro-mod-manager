@@ -102,12 +102,12 @@ pub fn get_lovely_mods_dir(
                     .parent()
                     .unwrap()
                     .to_path_buf();
-                log::debug!("Assuming steam wineprefix: `{}`", p.to_string_lossy());
                 p
             } else {
                 dirs::home_dir().unwrap().join(".steam/steam/steamapps/")
             }
         };
+        log::debug!("Assuming steam wineprefix: `{}`", prefix.to_string_lossy());
 
         prefix.join("compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/Mods")
     }
