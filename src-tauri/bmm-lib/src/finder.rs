@@ -85,25 +85,29 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     paths
 }
 
-pub fn get_lovely_mods_dir() -> PathBuf {
+pub fn get_lovely_mods_dir(
+    #[cfg(target_os = "linux")] installation_path: Option<&String>,
+    #[cfg(not(target_os = "linux"))] _installation_path: Option<&String>,
+) -> PathBuf {
     #[cfg(target_os = "linux")]
     {
-        // ~/.steam/steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro
-        let mut path = dirs::home_dir().unwrap();
-        path.push(".steam");
-        path.push("steam");
-        path.push("steamapps");
-        path.push("compatdata");
-        path.push("2379780");
-        path.push("pfx");
-        path.push("drive_c");
-        path.push("users");
-        path.push("steamuser");
-        path.push("AppData");
-        path.push("Roaming");
-        path.push("Balatro");
-        path.push("Mods");
-        path
+        // probably ~/.steam/steam/steamapps/
+        let prefix = {
+            let installation_path = installation_path.map_or(PathBuf::new(), PathBuf::from);
+            if installation_path.ends_with("steamapps/common/Balatro/") {
+                installation_path
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+            } else {
+                dirs::home_dir().unwrap().join(".steam/steam/steamapps/")
+            }
+        };
+        log::debug!("Assuming steam wineprefix: `{}`", prefix.to_string_lossy());
+
+        prefix.join("compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/Mods")
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -178,7 +182,7 @@ pub fn is_steam_running() -> bool {
     }
 }
 
-pub fn get_installed_mods() -> Vec<String> {
+pub fn get_installed_mods(installation_path: Option<&String>) -> Vec<String> {
     let mut installed_mods_paths: Vec<PathBuf> = vec![];
     // let game_path = get_balatro_paths();
     // let game_name: PathBuf = game_path
@@ -186,7 +190,7 @@ pub fn get_installed_mods() -> Vec<String> {
     //     .unwrap_or_else(|| panic!("Failed to find Balatro installation path. Is it installed?"))
     //     .to_path_buf();
 
-    let mod_dir = get_lovely_mods_dir();
+    let mod_dir = get_lovely_mods_dir(installation_path);
 
     // dbg!(&mod_dir);
 

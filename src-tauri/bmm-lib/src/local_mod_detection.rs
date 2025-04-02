@@ -116,9 +116,12 @@ pub fn detect_manual_mods(
     db: &Database,
     cached_catalog_mods: &[cache::Mod],
 ) -> Result<Vec<DetectedMod>, String> {
-    let mod_dir = get_lovely_mods_dir();
+    #[cfg(not(target_os = "linux"))]
+    let mods_dir = get_lovely_mods_dir(None);
+    #[cfg(target_os = "linux")]
+    let mods_dir = get_lovely_mods_dir(db.get_installation_path()?.as_ref());
 
-    if !mod_dir.exists() {
+    if !mods_dir.exists() {
         return Ok(Vec::new());
     }
 
@@ -141,11 +144,11 @@ pub fn detect_manual_mods(
     let mut bundled_dependencies = HashSet::new();
 
     // Find bundled dependencies in mod packages
-    find_bundled_dependencies(&mod_dir, &mut bundled_dependencies)?;
+    find_bundled_dependencies(&mods_dir, &mut bundled_dependencies)?;
 
     // Detect mods from filesystem
     let mut all_detected_mods = Vec::new();
-    detect_mods_recursive(&mod_dir, &mut all_detected_mods, &bundled_dependencies)?;
+    detect_mods_recursive(&mods_dir, &mut all_detected_mods, &bundled_dependencies)?;
 
     // Process detected mods to find catalog matches and handle duplicates
     for mut mod_info in all_detected_mods {
