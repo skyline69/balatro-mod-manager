@@ -10,6 +10,8 @@
     flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    mesa_24_0-pin.url = "github:nixos/nixpkgs/e913ae340076bbb73d9f4d3d065c2bca7caafb16";
   };
 
   outputs = {
@@ -18,7 +20,7 @@
     flake-utils,
     gitignore,
     ...
-  }:
+  } @ inputs:
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -79,18 +81,20 @@
 
             buildInputs = with pkgs;
               [openssl]
-              ++ lib.optionals stdenv.isLinux [
-                atk
-                cairo
-                gdk-pixbuf
-                glib
-                gtk3
-                harfbuzz
-                librsvg
-                libsoup_3
-                pango
-                webkitgtk_4_1
-              ]
+              ++ lib.optionals stdenv.isLinux (
+                [inputs.mesa_24_0-pin.legacyPackages.${system}.webkitgtk_4_1]
+                ++ [
+                  atk
+                  cairo
+                  gdk-pixbuf
+                  glib
+                  gtk3
+                  harfbuzz
+                  librsvg
+                  libsoup_3
+                  pango
+                ]
+              )
               ++ lib.optionals stdenv.isDarwin [darwin.apple_sdk.frameworks.WebKit];
 
             postInstall = with pkgs;
