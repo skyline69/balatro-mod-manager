@@ -66,7 +66,7 @@
             # using pnpm to fetch deps and bun to build, since nix doesn't have a bun fetcher
             pnpmDeps = pkgs.pnpm.fetchDeps {
               inherit src pname version patchPhase;
-              hash = "sha256-faofv1ReGaS1sHiHHBrN/2QA8aPhxj01ZtSjkBALs9E=";
+              hash = "sha256-kYO41kM7FVk5Z3a92wsEfivAqvH2I8PH/OS81GQb1GU=";
             };
 
             nativeBuildInputs = with pkgs; [
