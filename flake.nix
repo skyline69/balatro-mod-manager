@@ -10,6 +10,8 @@
     flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    mesa_24_0-pin.url = "github:nixos/nixpkgs/e913ae340076bbb73d9f4d3d065c2bca7caafb16";
   };
 
   outputs = {
@@ -18,7 +20,7 @@
     flake-utils,
     gitignore,
     ...
-  }:
+  } @ inputs:
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -38,13 +40,13 @@
           version = cargo-toml.package.version;
 
           patchPhase = ''
-            # allow pnpm, upstreamed to nixpkgs master
+            cp ${./.hack/package.json} package.json
+            # allow `pnpm` by removing the `packageManager` field
             cp ${pkgs.writeText "${pname}-${version}-package.json" (
               builtins.toJSON (
                 (pkgs.lib.importJSON "${src}/package.json") // {packageManager = null;}
               )
             )} package.json
-
             cp ${./.hack/pnpm-lock.yaml} pnpm-lock.yaml
           '';
 
@@ -66,7 +68,7 @@
             # using pnpm to fetch deps and bun to build, since nix doesn't have a bun fetcher
             pnpmDeps = pkgs.pnpm.fetchDeps {
               inherit src pname version patchPhase;
-              hash = "sha256-faofv1ReGaS1sHiHHBrN/2QA8aPhxj01ZtSjkBALs9E=";
+              hash = "sha256-kYO41kM7FVk5Z3a92wsEfivAqvH2I8PH/OS81GQb1GU=";
             };
 
             nativeBuildInputs = with pkgs; [
@@ -79,18 +81,20 @@
 
             buildInputs = with pkgs;
               [openssl]
-              ++ lib.optionals stdenv.isLinux [
-                atk
-                cairo
-                gdk-pixbuf
-                glib
-                gtk3
-                harfbuzz
-                librsvg
-                libsoup_3
-                pango
-                webkitgtk_4_1
-              ]
+              ++ lib.optionals stdenv.isLinux (
+                [inputs.mesa_24_0-pin.legacyPackages.${system}.webkitgtk_4_1]
+                ++ [
+                  atk
+                  cairo
+                  gdk-pixbuf
+                  glib
+                  gtk3
+                  harfbuzz
+                  librsvg
+                  libsoup_3
+                  pango
+                ]
+              )
               ++ lib.optionals stdenv.isDarwin [darwin.apple_sdk.frameworks.WebKit];
 
             postInstall = with pkgs;
