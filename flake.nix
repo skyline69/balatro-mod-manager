@@ -39,14 +39,14 @@
           pname = cargo-toml.package.name;
           version = cargo-toml.package.version;
 
-          patchPhase = ''
+          postPatch = ''
             # use the old package.json and allow `pnpm` by removing the `packageManager` field
             cp ${pkgs.writeText "${pname}-${version}-package.json" (
               builtins.toJSON (
                 (pkgs.lib.importJSON ./.hack/package.json) // {packageManager = null;}
               )
             )} package.json
-            cp ${./.hack/pnpm-lock.yaml} pnpm-lock.yaml
+            cp ${./.hack/package-lock.json} package-lock.json
           '';
 
           mainProgram =
@@ -54,7 +54,7 @@
             (pkgs.lib.lists.findFirst (f: f.path == "src/main.rs") null cargo-toml.bin).name;
         in
           pkgs.rustPlatform.buildRustPackage {
-            inherit src pname version patchPhase;
+            inherit src pname version postPatch;
             doCheck = false;
 
             buildAndTestSubdir = "src-tauri";
@@ -64,17 +64,21 @@
               "fix-path-env-0.0.0" = "sha256-SHJc86sbK2fA48vkVjUpvC5FQoBOno3ylUV5J1b4dAk=";
             };
 
-            # using pnpm to fetch deps and bun to build, since nix doesn't have a bun fetcher
-            pnpmDeps = pkgs.pnpm.fetchDeps {
-              inherit src pname version patchPhase;
-              hash = "sha256-kYO41kM7FVk5Z3a92wsEfivAqvH2I8PH/OS81GQb1GU=";
+            # using npm to fetch deps and bun to build, since nix doesn't have a bun fetcher
+            npmDeps = pkgs.fetchNpmDeps {
+              inherit src postPatch;
+              name = "${pname}-${version}-npm-deps";
+              hash = "sha256-jFyKuqmJsvFgSIyLM0PmiMz+5XlG/k+AOF+e5rYx498=";
             };
 
             nativeBuildInputs = with pkgs; [
               pkg-config
               bun
-              pnpm.configHook
               cargo-tauri.hook
+
+              nodejs
+              npmHooks.npmConfigHook
+
               wrapGAppsHook3
             ];
 

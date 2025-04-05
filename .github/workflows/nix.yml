@@ -1,0 +1,51 @@
+name: update nix npm deps hash
+
+on:
+  push:
+    branches:
+      - main
+      - 66-linux-support
+      - 66-linux-support-upstream
+    paths:
+      - 'package.json'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-nix-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '*'
+
+      - name: configure env
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: create new `package-lock.json`
+        run: npm i --no-audit
+
+      - name: update nix npm deps lockfile
+        run: |
+          HASH="$(nix run nixpkgs#prefetch-npm-deps package-lock.json)"
+          echo "npm-deps-hash: $HASH"
+          sed -i 's!hash\s*=.*!hash = "'$HASH'"\;!' flake.nix
+          cp package{,-lock}.json ./.hack/
+
+      - name: confirm BMM still builds with updated deps
+        run: nix build --print-build-logs
+
+      - name: commit changes
+        run: |
+          git add ./.hack/package{,-lock}.json flake.nix
+          git commit -m "[ci skip] nix: update npm deps lockfile (`date --utc +%Y%m%d_%H%M%SZ`)"
+          git push origin HEAD:"$(git branch --show)"
