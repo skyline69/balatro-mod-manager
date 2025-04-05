@@ -40,11 +40,10 @@
           version = cargo-toml.package.version;
 
           patchPhase = ''
-            cp ${./.hack/package.json} package.json
-            # allow `pnpm` by removing the `packageManager` field
+            # use the old package.json and allow `pnpm` by removing the `packageManager` field
             cp ${pkgs.writeText "${pname}-${version}-package.json" (
               builtins.toJSON (
-                (pkgs.lib.importJSON "${src}/package.json") // {packageManager = null;}
+                (pkgs.lib.importJSON ./.hack/package.json) // {packageManager = null;}
               )
             )} package.json
             cp ${./.hack/pnpm-lock.yaml} pnpm-lock.yaml
