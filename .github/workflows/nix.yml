@@ -21,10 +21,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: nixbuild/nix-quick-install-action@v30
       - uses: actions/setup-node@v4
         with:
           node-version: '*'
+
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+
+          # purge all other caches
+          purge: true
+          purge-primary-key: never
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
 
       - name: configure env
         run: |
@@ -36,7 +47,7 @@ jobs:
 
       - name: update nix npm deps lockfile
         run: |
-          HASH="$(nix run nixpkgs#prefetch-npm-deps package-lock.json)"
+          HASH="$(nix run github:nixos/nixpkgs/nixpkgs-unstable#prefetch-npm-deps package-lock.json)"
           echo "npm-deps-hash: $HASH"
           sed -i 's!hash\s*=.*!hash = "'$HASH'"\;!' flake.nix
           cp package{,-lock}.json ./.hack/
