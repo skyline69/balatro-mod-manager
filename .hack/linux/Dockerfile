@@ -18,8 +18,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 FROM base AS builder
 
 WORKDIR /app/src
-COPY . .
+
+# cache node_modules separately from the source code :)
+COPY package.json bun.lock ./
 RUN bun i
+
+COPY . .
 RUN \
     --mount=type=cache,target=/app/src/src-tauri/target/ \
     --mount=type=cache,target=/app/src/src-tauri/bmm-lib/target/ \
