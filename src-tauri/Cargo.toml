@@ -39,6 +39,8 @@ tauri-plugin-prevent-default = "1.2.1"
 tar = "0.4.44"
 flate2 = "1.1.1"
 walkdir = "2.5.0"
+regex = "1.11.1"
+lazy_static = "1.5.0"
 
 [dev-dependencies]
 tempfile = "3.19.1"

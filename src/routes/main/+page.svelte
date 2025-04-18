@@ -10,6 +10,8 @@
 	import { currentModView, modsStore } from "../../stores/modStore";
 	import { backgroundEnabled } from "../../stores/modStore";
 	import { selectedModStore, dependentsStore } from "../../stores/modStore";
+	import SaveEditor from "../../components/viewblock/SaveEditor.svelte";
+
 	import {
 		installationStatus,
 		showWarningPopup,
@@ -172,6 +174,12 @@
 				Mods
 			</button>
 			<button
+				class:active={currentSection === "save_editor"}
+				onclick={() => (currentSection = "save_editor")}
+			>
+				Save Editor
+			</button>
+			<button
 				class:active={currentSection === "settings"}
 				onclick={() => (currentSection = "settings")}
 			>
@@ -197,6 +205,10 @@
 				{handleDependencyCheck}
 				on:request_uninstall={handleRequestUninstall}
 			/>
+		{/if}
+
+		{#if currentSection === "save_editor"}
+			<SaveEditor />
 		{/if}
 
 		{#if currentSection === "settings"}

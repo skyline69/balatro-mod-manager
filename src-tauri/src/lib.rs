@@ -1,4 +1,5 @@
 mod github_repo;
+mod save_editor;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use flate2::read::GzDecoder;
@@ -1700,7 +1701,6 @@ async fn path_exists(path: String) -> Result<bool, String> {
     let path = PathBuf::from(path);
     Ok(path.exists())
 }
-
 #[tauri::command]
 async fn check_custom_balatro(
     state: tauri::State<'_, AppState>,
@@ -1842,6 +1842,10 @@ pub fn run() {
             toggle_mod_enabled,
             is_mod_enabled_by_path,
             toggle_mod_enabled_by_path,
+            save_editor::list_save_directories,
+            save_editor::load_save_file,
+            save_editor::save_modified_file,
+            save_editor::get_balatro_save_path
         ])
         .run(tauri::generate_context!());
 

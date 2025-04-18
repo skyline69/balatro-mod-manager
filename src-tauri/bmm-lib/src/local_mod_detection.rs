@@ -251,12 +251,12 @@ fn find_catalog_match(
 
         // 4. Try substring matching (check if one contains the other)
         // Avoid matching if one is very short to prevent too many false positives
-        if local_name_lower.len() > 3 && catalog_title_lower.len() > 3 {
-            if local_name_lower.contains(&catalog_title_lower)
-                || catalog_title_lower.contains(&local_name_lower)
-            {
-                return Some(create_match(catalog_mod));
-            }
+        if local_name_lower.len() > 3
+            && catalog_title_lower.len() > 3
+            && (local_name_lower.contains(&catalog_title_lower)
+                || catalog_title_lower.contains(&local_name_lower))
+        {
+            return Some(create_match(catalog_mod));
         }
     }
 
