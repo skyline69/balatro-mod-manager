@@ -1,3 +1,4 @@
+// TODO: Currently this only gives Profile.jkr's and settings.jkr and blueprint.jkr. Can you now make it give meta.jkr & save.jkr too from the folders?
 // src-tauri/src/save_editor.rs
 use bmm_lib::balamod; // Use the balamod module from the library crate
 use bmm_lib::errors::AppError; // Use the AppError type from the library crate

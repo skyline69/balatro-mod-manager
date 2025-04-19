@@ -636,7 +636,7 @@
 				</div>
 			{:else}
 				<p class="placeholder-text">
-					No Balatro save. containing .jkr files found.
+					No Balatro save containing .jkr files found.
 					<br />
 					Play Balatro to generate saves, then refresh.
 				</p>
