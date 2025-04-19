@@ -533,3 +533,20 @@ pub async fn get_balatro_save_path() -> Result<String, String> {
         .map(|p| p.to_string_lossy().into_owned())
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn get_file_last_modified(path: String) -> Result<u64, String> {
+    let metadata =
+        std::fs::metadata(&path).map_err(|e| format!("Failed to get metadata: {}", e))?;
+
+    let modified = metadata
+        .modified()
+        .map_err(|e| format!("Failed to get modification time: {}", e))?;
+
+    let timestamp = modified
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map_err(|e| format!("Failed to convert to timestamp: {}", e))?
+        .as_millis() as u64;
+
+    Ok(timestamp)
+}

@@ -1842,10 +1842,11 @@ pub fn run() {
             toggle_mod_enabled,
             is_mod_enabled_by_path,
             toggle_mod_enabled_by_path,
+            save_editor::get_file_last_modified,
             save_editor::list_save_directories,
             save_editor::load_save_file,
             save_editor::save_modified_file,
-            save_editor::get_balatro_save_path
+            save_editor::get_balatro_save_path,
         ])
         .run(tauri::generate_context!());
 

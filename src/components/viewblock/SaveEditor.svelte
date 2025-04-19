@@ -44,6 +44,10 @@
 	let confirmButtonRef = $state<HTMLButtonElement | null>(null);
 	let modalElement = $state<HTMLElement | null>(null);
 	let lastActiveElement: HTMLElement | null = null; // Changed type to HTMLElement
+	let editedSavePaths = $state<Set<string>>(new Set());
+	let confirmButtonLabel = $state("Discard Changes"); // Default button label
+	let proceedAnywayPaths = $state<Set<string>>(new Set());
+	let editedSaveTimestamps = $state<Map<string, number>>(new Map()); // Track when we last edited each file
 
 	let saveDirectories = $state<SaveDirectoryInfo[]>([]);
 	let selectedDirectory = $state<SaveDirectoryInfo | null>(null);
@@ -240,6 +244,10 @@
 		isDirty = false;
 		editorValid.set(true);
 
+		// Don't reset editedSavePaths here, as we want to remember which saves were edited
+		// But we can reset the proceedAnywayPaths as a refresh could indicate restart of Balatro
+		proceedAnywayPaths = new Set();
+
 		try {
 			try {
 				saveFolderPath = await invoke("get_balatro_save_path");
@@ -254,12 +262,12 @@
 			saveDirectories = dirs;
 			if (dirs.length === 0 && saveFolderPath !== "Unknown") {
 				addMessage(
-					`No save profiles found in ${saveFolderPath}. Play Balatro to create saves.`,
+					`No saves found in ${saveFolderPath}. Play Balatro to create saves.`,
 					"info",
 				);
 			} else if (dirs.length === 0) {
 				addMessage(
-					`No save profiles found. Could not determine save path.`,
+					`No saves found. Could not determine save path.`,
 					"warning",
 				);
 			}
@@ -275,6 +283,7 @@
 		title: string,
 		message: string,
 		onConfirm: () => void,
+		buttonLabel: string = "Discard Changes",
 	) {
 		// Store the currently focused element to restore focus when closing
 		const activeElement = document.activeElement;
@@ -285,6 +294,7 @@
 		confirmTitle = title;
 		confirmMessage = message;
 		confirmAction = onConfirm;
+		confirmButtonLabel = buttonLabel; // Set the button label
 		showConfirmModal = true;
 	}
 
@@ -325,6 +335,33 @@
 		}
 	}
 
+	async function hasFileBeenModifiedSinceEdit(
+		filePath: string,
+	): Promise<boolean> {
+		try {
+			if (!editedSaveTimestamps.has(filePath)) {
+				return false; // We haven't edited it, so no need to check
+			}
+
+			// Get the current file modification time
+			const currentModTime = await invoke<number>(
+				"get_file_last_modified",
+				{
+					path: filePath,
+				},
+			);
+
+			// Compare with our stored edit time
+			const ourEditTime = editedSaveTimestamps.get(filePath) || 0;
+
+			// If the file's modification time is newer than our edit time, Balatro likely ran
+			return currentModTime > ourEditTime;
+		} catch (error) {
+			console.error("Error checking file modification time:", error);
+			return false; // Assume no modification on error
+		}
+	}
+
 	async function loadSelectedSave(directory: SaveDirectoryInfo) {
 		if (!directory.jkr_file_path) {
 			addMessage(
@@ -341,39 +378,63 @@
 			return;
 		}
 
+		// Check if this save was previously edited but user hasn't chosen to proceed with it yet
+		if (directory.jkr_file_path) {
+			// Check if this save has been edited before
+			if (editedSavePaths.has(directory.jkr_file_path)) {
+				// If user already clicked "Proceed Anyway" for this save, skip the warning
+				if (proceedAnywayPaths.has(directory.jkr_file_path)) {
+					loadSaveImplementation(directory);
+					return;
+				}
+
+				// Check if the file has been modified since our last edit (Balatro ran)
+				const fileModified = await hasFileBeenModifiedSinceEdit(
+					directory.jkr_file_path,
+				);
+
+				if (fileModified) {
+					// Balatro ran and modified the file, so remove it from our edited list
+					editedSavePaths.delete(directory.jkr_file_path);
+					editedSaveTimestamps.delete(directory.jkr_file_path);
+					loadSaveImplementation(directory);
+					return;
+				}
+
+				// File hasn't been modified by Balatro, show warning
+				showConfirmDialog(
+					"Run Balatro First",
+					"You have previously edited this save file. To safely edit it again, you should run Balatro first to let it process your changes. Do you want to proceed anyway?",
+					() => {
+						// User confirmed they want to proceed anyway
+						proceedAnywayPaths.add(directory.jkr_file_path!);
+						loadSaveImplementation(directory);
+					},
+					"Proceed Anyway",
+				);
+				return;
+			}
+		}
+
+		// Handle unsaved changes case
 		if (isDirty) {
 			showConfirmDialog(
 				"Unsaved Changes",
 				"You have unsaved changes. Are you sure you want to discard them and load a new file?",
-				async () => {
+				() => {
 					// This will run when user confirms
-					isLoadingFile = true;
-					isDirty = false;
-					editorValid.set(true);
-					selectedDirectory = directory;
-					loadedJkrPath = directory.jkr_file_path;
-
-					try {
-						const data = await invoke("load_save_file", {
-							path: loadedJkrPath,
-						});
-						saveData = data;
-						rawJson = JSON.stringify(saveData, null, 2);
-					} catch (error) {
-						console.error("Failed to load save file:", error);
-						addMessage(`Error loading save: ${error}`, "error");
-						selectedDirectory = null;
-						loadedJkrPath = null;
-						saveData = null;
-						rawJson = "";
-					} finally {
-						isLoadingFile = false;
-					}
+					loadSaveImplementation(directory);
 				},
 			);
 			return;
 		}
 
+		// If no warnings needed, load the save directly
+		loadSaveImplementation(directory);
+	}
+
+	// Helper function to avoid code duplication
+	async function loadSaveImplementation(directory: SaveDirectoryInfo) {
 		isLoadingFile = true;
 		isDirty = false;
 		editorValid.set(true);
@@ -420,6 +481,13 @@
 			});
 			saveData = updatedData; // Update internal state if needed
 			isDirty = false;
+
+			// Track this save as edited
+			if (loadedJkrPath) {
+				editedSavePaths.add(loadedJkrPath);
+				editedSaveTimestamps.set(loadedJkrPath, Date.now());
+			}
+
 			addMessage("Save file updated successfully!", "success");
 		} catch (error) {
 			console.error("Failed to save file:", error);
@@ -525,11 +593,9 @@
 			</div>
 
 			{#if isLoadingList}
-				<p class="loading-placeholder">Scanning for save profiles...</p>
+				<p class="loading-placeholder">Scanning for saves...</p>
 			{:else if saveDirectories.length > 0}
-				<p class="list-header">
-					Select a profile directory to load its save file:
-				</p>
+				<p class="list-header">Select a save file:</p>
 				<div class="directory-list default-scrollbar">
 					{#each saveDirectories as dir (dir.path)}
 						<button
@@ -570,7 +636,7 @@
 				</div>
 			{:else}
 				<p class="placeholder-text">
-					No Balatro save profiles containing .jkr files found.
+					No Balatro save. containing .jkr files found.
 					<br />
 					Play Balatro to generate saves, then refresh.
 				</p>
@@ -606,7 +672,7 @@
 					size={14}
 					style="margin-right: 4px; vertical-align: middle;"
 				/>
-				<span>Editing Profile:</span>
+				<span>Editing:</span>
 				<span style="margin-left: 6px;"
 					><strong>{selectedDirectory.name}</strong></span
 				>
@@ -668,7 +734,7 @@
 					onclick={handleConfirm}
 					bind:this={confirmButtonRef}
 				>
-					Discard Changes
+					{confirmButtonLabel}
 				</button>
 			</div>
 		</div>
