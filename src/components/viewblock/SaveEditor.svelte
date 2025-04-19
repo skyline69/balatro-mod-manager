@@ -5,12 +5,12 @@
 	import { onMount, onDestroy } from "svelte";
 	import {
 		Save,
-		FileDown,
 		RefreshCw,
 		AlertTriangle,
 		List,
 		Folder,
 		Edit,
+		X,
 	} from "lucide-svelte";
 
 	// CodeMirror imports
@@ -36,6 +36,15 @@
 		error_message: string | null;
 	}
 
+	// Modal state
+	let showConfirmModal = $state(false);
+	let confirmAction = $state<(() => void) | null>(null);
+	let confirmMessage = $state("");
+	let confirmTitle = $state("");
+	let confirmButtonRef = $state<HTMLButtonElement | null>(null);
+	let modalElement = $state<HTMLElement | null>(null);
+	let lastActiveElement: HTMLElement | null = null; // Changed type to HTMLElement
+
 	let saveDirectories = $state<SaveDirectoryInfo[]>([]);
 	let selectedDirectory = $state<SaveDirectoryInfo | null>(null);
 	let loadedJkrPath = $state<string | null>(null);
@@ -53,6 +62,7 @@
 	let editorElement = $state<HTMLElement | null>(null);
 	let editorView = $state<EditorView | null>(null);
 
+	// Custom theme to override the oneDark theme and remove text stroke
 	// Custom theme to override the oneDark theme and remove text stroke
 	const customTheme = EditorView.theme({
 		".cm-content": {
@@ -72,6 +82,25 @@
 		".cm-scroller": {
 			overflow: "auto",
 			height: "100%",
+			// Add custom scrollbar styling
+			"&::-webkit-scrollbar": {
+				width: "10px",
+			},
+			"&::-webkit-scrollbar-track": {
+				background: "transparent",
+				borderRadius: "15px",
+			},
+			"&::-webkit-scrollbar-thumb": {
+				background: "#f4eee0",
+				border: "2px solid rgba(193, 65, 57, 0.8)",
+				borderRadius: "15px",
+			},
+			"&::-webkit-scrollbar:horizontal": {
+				display: "none",
+			},
+			"&::-webkit-scrollbar-corner": {
+				backgroundColor: "transparent",
+			},
 		},
 		// Make sure JSON syntax colors have no text stroke
 		".cm-string": { textShadow: "none", color: "#a5d6a7" },
@@ -189,6 +218,18 @@
 		}
 	});
 
+	// Set focus to the confirm button when modal opens
+	$effect(() => {
+		if (showConfirmModal && confirmButtonRef) {
+			setTimeout(() => {
+				// Check again in case it changed during the timeout
+				if (confirmButtonRef) {
+					confirmButtonRef.focus();
+				}
+			}, 50);
+		}
+	});
+
 	async function listSaves() {
 		isLoadingList = true;
 		saveDirectories = [];
@@ -230,6 +271,60 @@
 		}
 	}
 
+	function showConfirmDialog(
+		title: string,
+		message: string,
+		onConfirm: () => void,
+	) {
+		// Store the currently focused element to restore focus when closing
+		const activeElement = document.activeElement;
+		if (activeElement instanceof HTMLElement) {
+			lastActiveElement = activeElement;
+		}
+
+		confirmTitle = title;
+		confirmMessage = message;
+		confirmAction = onConfirm;
+		showConfirmModal = true;
+	}
+
+	function closeConfirmDialog() {
+		showConfirmModal = false;
+		confirmAction = null;
+
+		// Restore focus to the element that was focused before the modal opened
+		if (lastActiveElement) {
+			setTimeout(() => {
+				if (lastActiveElement) {
+					lastActiveElement.focus();
+				}
+			}, 10);
+		}
+	}
+
+	function handleConfirm() {
+		if (confirmAction) {
+			const action = confirmAction;
+			closeConfirmDialog();
+			action();
+		}
+	}
+
+	function handleKeyDown(event: KeyboardEvent) {
+		if (!showConfirmModal) return;
+
+		if (event.key === "Escape") {
+			event.preventDefault();
+			closeConfirmDialog();
+		} else if (
+			event.key === "Enter" &&
+			document.activeElement === confirmButtonRef
+		) {
+			event.preventDefault();
+			handleConfirm();
+		}
+	}
+
 	async function loadSelectedSave(directory: SaveDirectoryInfo) {
 		if (!directory.jkr_file_path) {
 			addMessage(
@@ -245,11 +340,38 @@
 			);
 			return;
 		}
+
 		if (isDirty) {
-			const discard = confirm(
+			showConfirmDialog(
+				"Unsaved Changes",
 				"You have unsaved changes. Are you sure you want to discard them and load a new file?",
+				async () => {
+					// This will run when user confirms
+					isLoadingFile = true;
+					isDirty = false;
+					editorValid.set(true);
+					selectedDirectory = directory;
+					loadedJkrPath = directory.jkr_file_path;
+
+					try {
+						const data = await invoke("load_save_file", {
+							path: loadedJkrPath,
+						});
+						saveData = data;
+						rawJson = JSON.stringify(saveData, null, 2);
+					} catch (error) {
+						console.error("Failed to load save file:", error);
+						addMessage(`Error loading save: ${error}`, "error");
+						selectedDirectory = null;
+						loadedJkrPath = null;
+						saveData = null;
+						rawJson = "";
+					} finally {
+						isLoadingFile = false;
+					}
+				},
 			);
-			if (!discard) return;
+			return;
 		}
 
 		isLoadingFile = true;
@@ -317,46 +439,33 @@
 		}
 	}
 
-	function handleDownload() {
-		if (!saveData || !$editorValid) {
-			if (!$editorValid) addMessage("Invalid JSON in editor.", "error");
-			return;
-		}
-		try {
-			const updatedData = JSON.parse(rawJson);
-			const blob = new Blob([JSON.stringify(updatedData, null, 2)], {
-				type: "application/json",
-			});
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			const jkrFileName = loadedJkrPath?.split(/[\\/]/).pop() ?? "data";
-			const downloadName = selectedDirectory
-				? `${selectedDirectory.name}_${jkrFileName}.json`
-				: "save_data.json";
-			a.download = downloadName;
-			a.click();
-			URL.revokeObjectURL(url);
-			addMessage("JSON data downloaded.", "success");
-		} catch (e) {
-			addMessage(`Failed to download JSON: ${e}`, "error");
-		}
-	}
-
 	function goBackToList() {
 		if (isDirty) {
-			const discard = confirm(
+			showConfirmDialog(
+				"Unsaved Changes",
 				"You have unsaved changes. Are you sure you want to discard them and go back to the list?",
+				() => {
+					// This will run when user confirms
+					if (editorView) {
+						editorView.destroy();
+						editorView = null;
+					}
+					selectedDirectory = null;
+					loadedJkrPath = null;
+					saveData = null;
+					rawJson = "";
+					isDirty = false;
+					editorValid.set(true);
+				},
 			);
-			if (!discard) return;
+			return;
 		}
 
-		// Clean up editor
+		// Only reset state if not dirty
 		if (editorView) {
 			editorView.destroy();
 			editorView = null;
 		}
-
 		selectedDirectory = null;
 		loadedJkrPath = null;
 		saveData = null;
@@ -382,12 +491,15 @@
 
 	onMount(() => {
 		listSaves();
+		// Add global event listener for escape key
+		window.addEventListener("keydown", handleKeyDown);
 	});
 
 	onDestroy(() => {
 		if (editorView) {
 			editorView.destroy();
 		}
+		window.removeEventListener("keydown", handleKeyDown);
 	});
 </script>
 
@@ -409,9 +521,6 @@
 					>
 						<Folder size={18} /> Open Save Folder
 					</button>
-					<span class="save-path-display" title={saveFolderPath}
-						>Save Path: ...{saveFolderPath.slice(-40)}</span
-					>
 				{/if}
 			</div>
 
@@ -490,17 +599,6 @@
 					<Save size={18} />
 					{isSaving ? "Saving..." : "Save Changes"}
 				</button>
-				<button
-					onclick={handleDownload}
-					disabled={isSaving || isLoadingFile || !$editorValid}
-					class:invalid={!$editorValid}
-					title={$editorValid
-						? "Download the current editor content as a JSON file"
-						: "Cannot download: Invalid JSON"}
-				>
-					<FileDown size={18} />
-					Download as JSON
-				</button>
 			</div>
 
 			<p class="file-info">
@@ -508,8 +606,10 @@
 					size={14}
 					style="margin-right: 4px; vertical-align: middle;"
 				/>
-				Editing Profile: <strong>{selectedDirectory.name}</strong>
-				({loadedJkrPath?.split(/[\\/]/).pop() ?? "N/A"})
+				<span>Editing Profile:</span>
+				<span style="margin-left: 6px;"
+					><strong>{selectedDirectory.name}</strong></span
+				>
 				{#if isDirty}
 					<span class="unsaved-indicator">*</span>
 				{/if}
@@ -534,7 +634,69 @@
 	</div>
 </div>
 
+<!-- Confirmation Modal - Fixed for Accessibility -->
+{#if showConfirmModal}
+	<div
+		bind:this={modalElement}
+		class="modal-backdrop"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="modal-title"
+		tabindex="-1"
+	>
+		<!-- The modal content -->
+		<div class="modal-container">
+			<div class="modal-header">
+				<h3 id="modal-title">{confirmTitle}</h3>
+				<button
+					class="close-button"
+					onclick={closeConfirmDialog}
+					aria-label="Close dialog"
+				>
+					<X size={18} />
+				</button>
+			</div>
+			<div class="modal-content">
+				<p>{confirmMessage}</p>
+			</div>
+			<div class="modal-footer">
+				<button class="cancel-button" onclick={closeConfirmDialog}
+					>Cancel</button
+				>
+				<button
+					class="confirm-button"
+					onclick={handleConfirm}
+					bind:this={confirmButtonRef}
+				>
+					Discard Changes
+				</button>
+			</div>
+		</div>
+
+		<!-- Invisible button that covers the backdrop for accessibility -->
+		<button
+			class="backdrop-button"
+			onclick={closeConfirmDialog}
+			aria-label="Close dialog"
+			tabindex="-1"
+		>
+		</button>
+	</div>
+{/if}
+
 <style>
+	.backdrop-button {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: transparent;
+		border: none;
+		z-index: -1; /* Below the modal container */
+		cursor: default;
+	}
+
 	/* Main container structure - matches Settings.svelte */
 	.container {
 		width: 100%;
@@ -667,18 +829,6 @@
 	}
 	.controls button.invalid:hover {
 		background-color: #dc2626;
-	}
-
-	.save-path-display {
-		font-size: 0.9rem;
-		color: #b0adc8;
-		align-self: center;
-		margin-left: auto;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 300px;
-		flex-shrink: 1;
 	}
 
 	.list-header {
@@ -825,6 +975,121 @@
 		border-radius: 15px;
 	}
 
+	/* Modal Styles */
+	.modal-backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		backdrop-filter: blur(2px);
+	}
+
+	.modal-container {
+		background-color: #352e44;
+		border-radius: 8px;
+		width: 95%;
+		max-width: 450px;
+		box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+		border: 2px solid #4a4458;
+		animation: modal-appear 0.3s ease-out;
+	}
+
+	@keyframes modal-appear {
+		from {
+			opacity: 0;
+			transform: translateY(-30px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.modal-header {
+		padding: 1rem 1.5rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		border-bottom: 1px solid #4a4458;
+	}
+
+	.modal-header h3 {
+		margin: 0;
+		color: #fdcf51;
+		font-size: 1.5rem;
+	}
+
+	.close-button {
+		background: transparent;
+		border: none;
+		color: #b0adc8;
+		cursor: pointer;
+		padding: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.close-button:hover {
+		color: #f4eee0;
+		background-color: rgba(255, 255, 255, 0.1);
+	}
+
+	.modal-content {
+		padding: 1.5rem;
+		color: #f4eee0;
+		font-size: 1.1rem;
+		line-height: 1.5;
+	}
+
+	.modal-footer {
+		padding: 1rem 1.5rem;
+		display: flex;
+		justify-content: flex-end;
+		gap: 1rem;
+		border-top: 1px solid #4a4458;
+	}
+
+	.modal-footer button {
+		padding: 0.6rem 1.2rem;
+		border-radius: 6px;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.cancel-button {
+		background-color: transparent;
+		color: #f4eee0;
+		border: 1px solid #6a6478;
+	}
+
+	.cancel-button:hover {
+		background-color: rgba(255, 255, 255, 0.1);
+		border-color: #8a8498;
+	}
+
+	.confirm-button {
+		background-color: #b91c1c;
+		color: #f4eee0;
+		border: none;
+		outline: #991b1b solid 2px;
+	}
+
+	.confirm-button:hover {
+		background-color: #dc2626;
+		transform: translateY(-2px);
+	}
+
 	@media (max-width: 1160px) {
 		.save-editor-container {
 			padding: 0rem 1rem;
@@ -844,12 +1109,19 @@
 		.file-info {
 			font-size: 1rem;
 		}
-		.save-path-display {
-			font-size: 0.8rem;
-			max-width: 150px;
-		}
 		.list-header {
 			font-size: 1rem;
+		}
+		.modal-header h3 {
+			font-size: 1.3rem;
+		}
+		.modal-content {
+			padding: 1.2rem;
+			font-size: 1rem;
+		}
+		.modal-footer button {
+			font-size: 1rem;
+			padding: 0.5rem 1rem;
 		}
 	}
 </style>
