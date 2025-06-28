@@ -579,6 +579,27 @@ impl Database {
         }
     }
 
+    pub fn set_proton_path(&self, path: &str) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('proton_path', ?1)",
+            [path],
+        )?;
+        Ok(())
+    }
+    
+    pub fn get_proton_path(&self) -> Result<Option<String>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'proton_path'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn set_security_warning_acknowledged(&self, acknowledged: bool) -> Result<(), AppError> {
         let value = if acknowledged { "yes" } else { "no" };
         self.conn.execute(

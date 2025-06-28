@@ -15,6 +15,7 @@
 		cleanedEntries: 0,
 	};
 	let isDiscordRpcEnabled = false;
+	let protonPath = "";
 
 	export async function performReindexMods() {
 		isReindexing = true;
@@ -142,6 +143,20 @@
 		}
 	}
 
+	async function handleProtonPathChange() {
+		const newValue = protonPath;
+		try {
+			await invoke("set_proton_path", { path: newValue });
+			addMessage(
+				`Proton path set to ${newValue}`,
+				"success",
+			);
+		} catch (error) {
+			console.error("Failed to set proton path:", error);
+			addMessage("Failed to update proton path", "error");
+		}
+	}
+
 	onMount(async () => {
 		try {
 			isDiscordRpcEnabled = await invoke("get_discord_rpc_status");
@@ -161,6 +176,12 @@
 		} catch (error) {
 			console.error("Failed to get background status:", error);
 			addMessage("Error fetching background animation status", "error");
+		}
+		try {
+			protonPath = await invoke("get_proton_path");
+		} catch (error) {
+			console.error("Failed to get proton path:", error);
+			addMessage("Error fetching proton path", "error");
 		}
 	});
 </script>
@@ -237,6 +258,16 @@
 					remove:
 					<br />• Database entries for missing mod installations
 				</p>
+
+				<input
+					type="text"
+					bind:value={protonPath}
+					on:input={handleProtonPathChange}
+					placeholder="Proton Path"
+					class="proton-path-input"
+				/>
+
+				<p class="description-small">Changes the Proton path for Linux.</p>
 			</div>
 			<h3>Appearance</h3>
 			<div class="console-settings">
