@@ -256,7 +256,7 @@ pub fn is_balatro_running() -> bool {
         ];
 
         for name in balatro_process_names {
-            if system.processes_by_name(name).next().is_some() {
+            if system.processes_by_exact_name(name).next().is_some() {
                 return true;
             }
         }
