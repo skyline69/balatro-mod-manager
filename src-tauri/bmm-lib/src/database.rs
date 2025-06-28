@@ -579,18 +579,18 @@ impl Database {
         }
     }
 
-    pub fn set_proton_path(&self, path: &str) -> Result<(), AppError> {
+    pub fn set_linux_prefix(&self, path: &str) -> Result<(), AppError> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('proton_path', ?1)",
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('linux_prefix', ?1)",
             [path],
         )?;
         Ok(())
     }
     
-    pub fn get_proton_path(&self) -> Result<Option<String>, AppError> {
+    pub fn get_linux_prefix(&self) -> Result<Option<String>, AppError> {
         let mut stmt = self
             .conn
-            .prepare("SELECT value FROM settings WHERE setting = 'proton_path'")?;
+            .prepare("SELECT value FROM settings WHERE setting = 'linux_prefix'")?;
         let mut rows = stmt.query([])?;
 
         if let Some(row) = rows.next()? {
