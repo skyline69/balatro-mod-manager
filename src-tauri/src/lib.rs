@@ -1197,6 +1197,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
             .ok_or_else(|| "Linux prefix not found".to_string())?;
 
         let mut cmd = Command::new(prefix);
+        cmd.env("WINEDLLOVERRIDES", "version=n,b");
         cmd.current_dir(&path)
             .arg(exe_path.to_string_lossy().to_string());
 
