@@ -329,6 +329,30 @@ async fn set_lovely_console_status(
 }
 
 #[tauri::command]
+async fn set_linux_prefix(
+    state: tauri::State<'_, AppState>,
+    path: String)
+-> Result<(), String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    map_error(db.set_linux_prefix(&path))
+}
+
+#[tauri::command]
+async fn get_linux_prefix(
+    state: tauri::State<'_, AppState>)
+-> Result<String, String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| AppError::LockPoisoned("Database lock poisoned".to_string()))?;
+    let prefix = db.get_linux_prefix()?.ok_or("Prefix not found")?;
+    Ok(prefix)
+}
+
+#[tauri::command]
 async fn check_untracked_mods() -> Result<bool, String> {
     // Always return false since we're not removing untracked files
     Ok(false)
@@ -1071,7 +1095,7 @@ async fn set_discord_rpc_status(
 
 #[tauri::command]
 async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let (path_str, lovely_console_enabled) = {
+    let (path_str, lovely_console_enabled, linux_prefix) = {
         let db = state
             .db
             .lock()
@@ -1081,6 +1105,7 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
             db.get_installation_path()?
                 .ok_or_else(|| AppError::InvalidState("No installation path set".to_string()))?,
             db.is_lovely_console_enabled()?,
+            db.get_linux_prefix()?,
         )
     };
 
@@ -1161,10 +1186,36 @@ async fn launch_balatro(state: tauri::State<'_, AppState>) -> Result<(), String>
         log::debug!("Launched game from {}", exe_path.display());
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        let exe_path = find_executable_in_directory(&path)
+            .ok_or_else(|| format!("No executable found in {}", path.display()))?;
+
+
+        let prefix = linux_prefix
+            .as_ref()
+            .ok_or_else(|| "Linux prefix not found".to_string())?;
+
+        let mut cmd = Command::new(prefix);
+        cmd.current_dir(&path)
+            .arg(exe_path.to_string_lossy().to_string());
+
+        if !lovely_console_enabled {
+            cmd.arg("--disable-console");
+        }
+
+        // Spawn the pwoton process nya~!
+        cmd.spawn()
+            .map_err(|e| format!("Failed to launch {}: {}", exe_path.display(), e))?;
+
+        log::debug!("Launched game from {}", exe_path.display());
+    }
+
+
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn find_executable_in_directory(dir: &PathBuf) -> Option<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         // Create a Vec to hold all executable files
@@ -1838,6 +1889,16 @@ fn exit_application(app_handle: tauri::AppHandle) {
 //     bmm_lib::finder::get_installed_mods()
 // }
 
+#[tauri::command]
+fn get_operating_system() -> String {
+    #[cfg(target_os = "macos")]
+    return "macos".to_string();
+    #[cfg(target_os = "windows")]
+    return "windows".to_string();
+    #[cfg(target_os = "linux")]
+    return "linux".to_string();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
@@ -1913,6 +1974,8 @@ pub fn run() {
             load_versions_cache,
             set_lovely_console_status,
             get_lovely_console_status,
+            set_linux_prefix,
+            get_linux_prefix,
             check_untracked_mods,
             clear_cache,
             cascade_uninstall,
@@ -1949,7 +2012,8 @@ pub fn run() {
             toggle_mod_enabled_by_path,
             set_security_warning_acknowledged,
             is_security_warning_acknowledged,
-            exit_application
+            exit_application,
+            get_operating_system,
         ])
         .run(tauri::generate_context!());
 

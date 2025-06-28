@@ -595,6 +595,27 @@ impl Database {
         }
     }
 
+    pub fn set_linux_prefix(&self, path: &str) -> Result<(), AppError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (setting, value) VALUES ('linux_prefix', ?1)",
+            [path],
+        )?;
+        Ok(())
+    }
+    
+    pub fn get_linux_prefix(&self) -> Result<Option<String>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'linux_prefix'")?;
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn set_security_warning_acknowledged(&self, acknowledged: bool) -> Result<(), AppError> {
         let value = if acknowledged { "yes" } else { "no" };
         self.conn.execute(

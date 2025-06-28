@@ -1,6 +1,6 @@
 <script lang="ts">
 	import PathSelector from "../PathSelector.svelte";
-	import { Settings2, RefreshCw, Folder } from "lucide-svelte";
+	import { Settings2, RefreshCw, Folder, Save } from "lucide-svelte";
 	import { addMessage } from "$lib/stores";
 	import { onMount } from "svelte";
 	import { invoke } from "@tauri-apps/api/core";
@@ -15,6 +15,9 @@
 		cleanedEntries: 0,
 	};
 	let isDiscordRpcEnabled = false;
+
+	let linuxPrefix = "";
+	let operatingSystem = "";
 
 	export async function performReindexMods() {
 		isReindexing = true;
@@ -142,6 +145,20 @@
 		}
 	}
 
+	async function handleLinuxPrefixChange() {
+		const newValue = linuxPrefix;
+		try {
+			await invoke("set_linux_prefix", { path: newValue });
+			addMessage(
+				`Linux prefix set to ${newValue}`,
+				"success",
+			);
+		} catch (error) {
+			console.error("Failed to set prefix:", error);
+			addMessage("Failed to update prefix", "error");
+		}
+	}
+
 	onMount(async () => {
 		try {
 			isDiscordRpcEnabled = await invoke("get_discord_rpc_status");
@@ -162,6 +179,14 @@
 			console.error("Failed to get background status:", error);
 			addMessage("Error fetching background animation status", "error");
 		}
+		try {
+			linuxPrefix = await invoke("get_linux_prefix");
+		} catch (error) {
+			console.error("Failed to get Linux prefix:", error);
+			addMessage("Error fetching Linux prefix", "error");
+		}
+
+		operatingSystem = await invoke("get_operating_system");
 	});
 </script>
 
@@ -237,6 +262,26 @@
 					remove:
 					<br />• Database entries for missing mod installations
 				</p>
+								{#if operatingSystem == "linux"}
+
+					<input
+						type="text"
+						bind:value={linuxPrefix}
+						placeholder="Prefix"
+						class="prefix-input"
+					/>
+
+					<button
+						class="prefix-button"
+						on:click={handleLinuxPrefixChange}
+						title="Update Prefix"
+					>
+						<Save size={20} /> <!-- change to Save -->
+						Save Prefix
+					</button>
+
+					<p class="description-small">Changes the prefix for Linux. Recommended is to use wine/proton.</p>
+				{/if}
 			</div>
 			<h3>Appearance</h3>
 			<div class="console-settings">
@@ -355,6 +400,54 @@
 		cursor: not-allowed;
 		opacity: 0.8;
 		transform: none;
+	}
+		.prefix-button {
+		background: #ee8ed7;
+		color: #f4eee0;
+		border: none;
+		outline: #ca70b5 solid 2px;
+		border-radius: 4px;
+		padding: 0.75rem 1.5rem;
+		font-family: "M6X11", sans-serif;
+		font-size: 1.2rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		align-self: flex-start;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.prefix-button:hover {
+		background: #fba9e8;
+		transform: translateY(-2px);
+	}
+	.prefix-input {
+		width: auto;
+		margin: 0.5rem 0;
+	}
+	input[type="text"] {
+		padding: 0.75rem;
+		border: 2px solid #fda200;
+		border-radius: 8px;
+		background-color: #c88000;
+		font-family: "M6X11", sans-serif;
+		color: white;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	input[type="text"]:hover:not(:disabled) {
+		border-color: #f4eee0;
+	}
+	input[type="text"]::placeholder {
+		color: white;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 	.clear-cache-button {
 		background: #6d28d9;
