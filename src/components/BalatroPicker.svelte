@@ -52,6 +52,24 @@
 	const handleClick = async () => {
 		isLoading = true;
 		try {
+			async function safeNavigateToMain() {
+				const target = "/main";
+				try {
+					await goto(target, { replaceState: true });
+				} catch (_) {
+					// ignore and try hard navigation below
+				}
+				// Give the router a brief moment to update location
+				await new Promise((r) => setTimeout(r, 150));
+				if (window.location.pathname.endsWith("/main")) return;
+				// Fallback for older WebKit on macOS (Monterey)
+				try {
+					window.location.href = "/main.html";
+				} catch (_) {
+					window.location.href = target;
+				}
+			}
+
 			if (selectedOption === "steam") {
 				const paths: string[] = await invoke("find_steam_balatro");
 				if (paths.length === 0) {
@@ -67,7 +85,7 @@
 					);
 
 					await new Promise((resolve) => setTimeout(resolve, 1000));
-					await goto("/main", { replaceState: true });
+					await safeNavigateToMain();
 				}
 			} else if (selectedOption === "custom") {
 				if (!selectedPath) {
@@ -101,7 +119,7 @@
 					);
 					// Wait for the success message to show
 					await new Promise((resolve) => setTimeout(resolve, 1000));
-					await goto("/main", { replaceState: true });
+					await safeNavigateToMain();
 				} else {
 					addMessage("Invalid Balatro path", "error");
 				}

@@ -12,7 +12,23 @@ import { onMount, onDestroy } from "svelte";
 					"check_existing_installation",
 				);
 				if (existingPath) {
-					await goto("/main", { replaceState: true });
+					const target = "/main";
+					try {
+						await goto(target, { replaceState: true });
+					} catch (_) {
+						// ignore and try hard navigation below
+					}
+
+					// Allow SPA navigation a moment to apply
+					await new Promise((r) => setTimeout(r, 150));
+					if (!window.location.pathname.endsWith("/main")) {
+						// Fallback for older WebKit on macOS (Monterey)
+						try {
+							window.location.href = "/main.html";
+						} catch (_) {
+							window.location.href = target;
+						}
+					}
 				}
 			} catch (error) {
 				console.error("Error checking existing installation:", error);
