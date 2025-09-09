@@ -7,6 +7,12 @@ import { lovelyPopupStore } from "../stores/modStore";
 let showAlert = false;
 
 async function doLaunch() {
+  // Apply active profile (if any) before launching
+  try {
+    await invoke("apply_active_profile_if_set");
+  } catch (_) {
+    // If applying profile fails, continue to launch anyway
+  }
   const path = await invoke("get_balatro_path");
   if (path && path.toString().includes("Steam")) {
     let is_balatro_running: boolean = await invoke(

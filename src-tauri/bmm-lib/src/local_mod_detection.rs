@@ -76,18 +76,26 @@ pub fn detect_manual_mods_cached(
 ) -> Result<Vec<DetectedMod>, String> {
     let config_dir =
         dirs::config_dir().ok_or_else(|| "Could not find config directory".to_string())?;
-    let mods_dir = config_dir.join("Balatro").join("Mods");
+    let balatro = config_dir.join("Balatro");
+    let mods_dir = balatro.join("Mods");
+    let inactive_dir = balatro.join("Inactive Mods");
 
-    let fp = compute_fingerprint(&mods_dir);
+    let fp_mods = compute_fingerprint(&mods_dir);
+    // Combine fingerprint with inactive dir to invalidate cache when inactive changes
+    let fp_inactive = compute_fingerprint(&inactive_dir);
+    let combined = ScanFingerprint {
+        mods_dir: fp_mods.mods_dir.clone(),
+        checksum: fp_mods.checksum ^ fp_inactive.checksum.wrapping_mul(1099511628211),
+    };
     if let Ok(mut guard) = DETECTION_CACHE.lock() {
         if let Some((cached_fp, cached_mods)) = &*guard {
-            if cached_fp == &fp {
+            if cached_fp == &combined {
                 return Ok(cached_mods.clone());
             }
         }
         // Miss: compute fresh
         let fresh = detect_manual_mods(db, cached_catalog_mods)?;
-        *guard = Some((fp, fresh.clone()));
+        *guard = Some((combined, fresh.clone()));
         Ok(fresh)
     } else {
         // In the unlikely event of a poisoned mutex, fall back to direct scan
@@ -215,10 +223,7 @@ pub fn detect_manual_mods(
 
     let balatro_dir = config_dir.join("Balatro");
     let mod_dir = balatro_dir.join("Mods");
-
-    if !mod_dir.exists() {
-        return Ok(Vec::new());
-    }
+    let inactive_dir = balatro_dir.join("Inactive Mods");
 
     // Get tracked mods from the database for duplicate detection
     let managed_mods = db
@@ -238,18 +243,33 @@ pub fn detect_manual_mods(
     let mut manual_mods = Vec::new();
     let mut bundled_dependencies = HashSet::new();
 
-    // Find bundled dependencies in mod packages
-    find_bundled_dependencies(&mod_dir, &mod_dir, 0, &mut bundled_dependencies)?;
+    // Detect mods from Mods and Inactive Mods
+    if mod_dir.exists() {
+        find_bundled_dependencies(&mod_dir, &mod_dir, 0, &mut bundled_dependencies)?;
+    }
+    if inactive_dir.exists() {
+        find_bundled_dependencies(&inactive_dir, &inactive_dir, 0, &mut bundled_dependencies)?;
+    }
 
-    // Detect mods from filesystem
     let mut all_detected_mods = Vec::new();
-    detect_mods_recursive(
-        &mod_dir,
-        &mod_dir,
-        0,
-        &mut all_detected_mods,
-        &bundled_dependencies,
-    )?;
+    if mod_dir.exists() {
+        detect_mods_recursive(
+            &mod_dir,
+            &mod_dir,
+            0,
+            &mut all_detected_mods,
+            &bundled_dependencies,
+        )?;
+    }
+    if inactive_dir.exists() {
+        detect_mods_recursive(
+            &inactive_dir,
+            &inactive_dir,
+            0,
+            &mut all_detected_mods,
+            &bundled_dependencies,
+        )?;
+    }
 
     // Detect Talisman installed at Balatro root (outside Mods)
     for install_path in finder::get_balatro_paths() {
@@ -284,8 +304,21 @@ pub fn detect_manual_mods(
 
         // If this mod is not managed by path, consider it a manual mod
         if !is_path_managed(&mod_path, &managed_paths) {
-            // Check for name duplication with managed mods
+            // If the mod is under Mods or Inactive Mods and its name matches a managed mod name,
+            // treat it as managed (do not surface as local), even if path drifted earlier.
+            let under_managed_root = {
+                let p = PathBuf::from(&mod_path);
+                let mods_root = config_dir.join("Balatro").join("Mods");
+                let inactive_root = config_dir.join("Balatro").join("Inactive Mods");
+                p.starts_with(&mods_root) || p.starts_with(&inactive_root)
+            };
             let mod_name_lower = mod_info.name.to_lowercase();
+            if under_managed_root && managed_names.contains(&mod_name_lower) {
+                // Skip: catalog-installed mod moved by profiles should not appear as local
+                continue;
+            }
+
+            // Check for name duplication with managed mods
             if managed_names.contains(&mod_name_lower) {
                 mod_info.is_duplicate = true;
                 // Append a suffix to the name

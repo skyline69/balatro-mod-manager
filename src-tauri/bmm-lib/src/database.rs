@@ -17,7 +17,7 @@ pub struct InstalledMod {
 }
 
 impl Database {
-    const CURRENT_DB_VERSION: &'static str = "1.2"; // Update this when schema changes
+    const CURRENT_DB_VERSION: &'static str = "1.3"; // Update this when schema changes
 
     pub fn new() -> Result<Self, AppError> {
         let config_dir = dirs::config_dir()
@@ -319,6 +319,28 @@ impl Database {
         )
         .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
 
+        // Profiles: a simple way to store sets of mod paths and an optional active profile
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mod_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+            )",
+            [],
+        )
+        .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mod_profile_mods (
+                profile_id INTEGER NOT NULL,
+                mod_path TEXT NOT NULL,
+                PRIMARY KEY (profile_id, mod_path),
+                FOREIGN KEY(profile_id) REFERENCES mod_profiles(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .map_err(|e| AppError::DatabaseInit(e.to_string()))?;
+
         // Set the database version
         conn.execute(
             "INSERT OR REPLACE INTO settings (setting, value) VALUES ('db_version', ?1)",
@@ -535,6 +557,28 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_installed_mod_path_by_path(
+        &self,
+        old_path: &str,
+        new_path: &str,
+    ) -> Result<(), AppError> {
+        let updated = self.conn.execute(
+            "UPDATE installed_mods SET path = ?1 WHERE path = ?2",
+            [new_path, old_path],
+        )?;
+        if updated == 0 {
+            // Try with canonicalized old path if available
+            if let Ok(canon) = std::fs::canonicalize(old_path) {
+                let canon_str = canon.to_string_lossy();
+                self.conn.execute(
+                    "UPDATE installed_mods SET path = ?1 WHERE path = ?2",
+                    [new_path, &canon_str],
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_background_enabled(&self, enabled: bool) -> Result<(), AppError> {
         let enabled: &str = if enabled { "enabled" } else { "disabled" };
         self.conn.execute(
@@ -614,6 +658,113 @@ impl Database {
         } else {
             // Default to not acknowledged
             Ok(false)
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct ModProfile {
+    pub id: i64,
+    pub name: String,
+    pub mods: Vec<String>,
+}
+
+impl Database {
+    pub fn create_profile(&self, name: &str) -> Result<i64, AppError> {
+        self.conn
+            .execute("INSERT INTO mod_profiles (name) VALUES (?1)", [name])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn delete_profile(&self, id: i64) -> Result<(), AppError> {
+        self.conn
+            .execute("DELETE FROM mod_profile_mods WHERE profile_id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM mod_profiles WHERE id = ?1", [id])?;
+        // If it was active, clear the active setting
+        if let Ok(Some(active)) = self.get_active_profile_id() {
+            if active == id {
+                let _ = self.set_active_profile_id(None);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn rename_profile(&self, id: i64, new_name: &str) -> Result<(), AppError> {
+        use rusqlite::params;
+        self.conn.execute(
+            "UPDATE mod_profiles SET name = ?1 WHERE id = ?2",
+            params![new_name, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_profile_mods(&self, id: i64, mods: &[String]) -> Result<(), AppError> {
+        self.conn
+            .execute("DELETE FROM mod_profile_mods WHERE profile_id = ?1", [id])?;
+        for m in mods {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO mod_profile_mods (profile_id, mod_path) VALUES (?1, ?2)",
+                (&id, m),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_profile_mods(&self, id: i64) -> Result<Vec<String>, AppError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT mod_path FROM mod_profile_mods WHERE profile_id = ?1 ORDER BY mod_path",
+        )?;
+        let mut rows = stmt.query([id])?;
+        let mut result = Vec::new();
+        while let Some(r) = rows.next()? {
+            let p: String = r.get(0)?;
+            result.push(p);
+        }
+        Ok(result)
+    }
+
+    pub fn list_profiles(&self) -> Result<Vec<ModProfile>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name FROM mod_profiles ORDER BY name COLLATE NOCASE")?;
+        let mut rows = stmt.query([])?;
+        let mut result: Vec<ModProfile> = Vec::new();
+        while let Some(row) = rows.next()? {
+            let id: i64 = row.get(0)?;
+            let name: String = row.get(1)?;
+            let mods = self.get_profile_mods(id)?;
+            result.push(ModProfile { id, name, mods });
+        }
+        Ok(result)
+    }
+
+    pub fn set_active_profile_id(&self, id: Option<i64>) -> Result<(), AppError> {
+        if let Some(i) = id {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO settings (setting, value) VALUES ('active_profile_id', ?1)",
+                [i.to_string()],
+            )?;
+        } else {
+            self.conn.execute(
+                "DELETE FROM settings WHERE setting = 'active_profile_id'",
+                [],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_active_profile_id(&self) -> Result<Option<i64>, AppError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE setting = 'active_profile_id'")?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let v: String = row.get(0)?;
+            let parsed = v.parse::<i64>().ok();
+            Ok(parsed)
+        } else {
+            Ok(None)
         }
     }
 }

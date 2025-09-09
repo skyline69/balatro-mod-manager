@@ -51,6 +51,7 @@ import { listen } from "@tauri-apps/api/event";
 	} from "../../stores/modCache";
 	import { updateAvailableStore } from "../../stores/modStore";
 	import { modEnabledStore } from "../../stores/modStore";
+    import Profiles from "./Profiles.svelte";
 
 	const loadingDots = writable(0);
 	let installedMods: InstalledMod[] = [];
@@ -1227,6 +1228,7 @@ const { handleDependencyCheck, mod } = $props<{
 
 	const categories = [
 		{ name: "Installed Mods", icon: Download },
+		{ name: "Mod Profiles", icon: Folder },
 		{ name: "Search", icon: Search },
 		{ name: "All Mods", icon: LayoutDashboard },
 		{ name: "Content", icon: FolderHeart },
@@ -1594,59 +1596,66 @@ onDestroy(() => {
 						{/if}
 					{/if}
 
-					<div
-						class="pagination-controls"
-						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
-					>
-						<button
-							onclick={previousPage}
-							disabled={$currentPage === 1}>Previous</button
-						>
-						{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
-							{#if startPage + i <= totalPages}
-								<button
-									class:active={$currentPage ===
-										startPage + i}
-									onclick={() => goToPage(startPage + i)}
-								>
-									{startPage + i}
-								</button>
-							{/if}
-						{/each}
-						<button
-							onclick={nextPage}
-							disabled={$currentPage === totalPages}>Next</button
-						>
-					</div>
-
-					<div
-						class="sort-controls"
-						in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
-					>
-						<div class="sort-wrapper">
-							<ArrowUpDown size={16} />
-							<select
-								value={$currentSort}
-								onchange={handleSortChange}
+						{#if $currentCategory !== "Mod Profiles"}
+							<div
+								class="pagination-controls"
+								in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
 							>
-								<option value={SortOption.NameAsc}
-									>Name (A-Z)</option
+								<button
+									onclick={previousPage}
+									disabled={$currentPage === 1}>Previous</button
 								>
-								<option value={SortOption.NameDesc}
-									>Name (Z-A)</option
+								{#each Array(Math.min(maxVisiblePages, totalPages)) as _, i}
+									{#if startPage + i <= totalPages}
+										<button
+											class:active={$currentPage ===
+												startPage + i}
+											onclick={() => goToPage(startPage + i)}
+										>
+											{startPage + i}
+										</button>
+									{/if}
+								{/each}
+								<button
+									onclick={nextPage}
+									disabled={$currentPage === totalPages}>Next</button
 								>
-								<option value={SortOption.LastUpdatedDesc}
-									>Last Updated</option
-								>
-								<option value={SortOption.LastUpdatedAsc}
-									>Oldest Updated</option
-								>
-							</select>
-						</div>
-					</div>
+							</div>
+						{/if}
+
+						{#if $currentCategory !== "Mod Profiles"}
+							<div
+								class="sort-controls"
+								in:fly={{ duration: 400, y: 10, opacity: 0.2 }}
+							>
+								<div class="sort-wrapper">
+									<ArrowUpDown size={16} />
+									<select
+										value={$currentSort}
+										onchange={handleSortChange}
+									>
+										<option value={SortOption.NameAsc}
+											>Name (A-Z)</option
+										>
+										<option value={SortOption.NameDesc}
+											>Name (Z-A)</option
+										>
+										<option value={SortOption.LastUpdatedDesc}
+											>Last Updated</option
+										>
+										<option value={SortOption.LastUpdatedAsc}
+											>Oldest Updated</option
+										>
+									</select>
+								</div>
+							</div>
+						{/if}
 				</div>
 
 				<div class="mods-scroll-container default-scrollbar">
+					{#if $currentCategory === "Mod Profiles"}
+						<Profiles />
+						{:else}
 					{#if $currentCategory === "Installed Mods"}
 						{#if isLoadingLocalMods}
 							<div class="section-header">
@@ -1825,9 +1834,10 @@ onDestroy(() => {
 									onuninstallclick={uninstallMod}
 								/>
 							{/each}
-						</div>
-					{/if}
-				</div>
+  							</div>
+						{/if}
+						{/if}
+					</div>
 			</div>
 		{/if}
 	</div>

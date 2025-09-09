@@ -5,6 +5,7 @@ pub mod install;
 pub mod lovely;
 pub mod mods;
 pub mod paths;
+pub mod profiles;
 pub mod repo;
 pub mod report;
 pub mod settings;
