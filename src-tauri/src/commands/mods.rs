@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::state::AppState;
-use bmm_lib::errors::AppError;
+use bmm_lib::{errors::AppError, local_mod_detection};
 use std::fs;
 
 fn profile_dirs() -> Result<(PathBuf, PathBuf), String> {
@@ -143,6 +143,18 @@ pub async fn toggle_mod_enabled_by_path(
                 &target.to_string_lossy(),
             )
             .map_err(|e| e.to_string())?;
+
+            // If a profile is active, include this mod folder in its allow-list
+            if let Ok(Some(pid)) = db.get_active_profile_id() {
+                if let Ok(mut mods) = db.get_profile_mods(pid) {
+                    if !mods.iter().any(|m| m == &name) {
+                        mods.push(name.clone());
+                        let _ = db.set_profile_mods(pid, &mods);
+                    }
+                }
+            }
+            // Filesystem layout changed; clear detection cache
+            local_mod_detection::clear_detection_cache();
         }
     } else if current_parent.starts_with(&mods_canon) {
         let target = unique_target_path(&inactive_canon, &name);
@@ -156,6 +168,19 @@ pub async fn toggle_mod_enabled_by_path(
             &target.to_string_lossy(),
         )
         .map_err(|e| e.to_string())?;
+
+        // If a profile is active, remove this mod folder from its allow-list
+        if let Ok(Some(pid)) = db.get_active_profile_id() {
+            if let Ok(mut mods) = db.get_profile_mods(pid) {
+                let before = mods.len();
+                mods.retain(|m| m != &name);
+                if mods.len() != before {
+                    let _ = db.set_profile_mods(pid, &mods);
+                }
+            }
+        }
+        // Filesystem layout changed; clear detection cache
+        local_mod_detection::clear_detection_cache();
     }
     Ok(())
 }

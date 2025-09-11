@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::state::AppState;
-use bmm_lib::errors::AppError;
+use bmm_lib::{errors::AppError, local_mod_detection};
 
 #[derive(Serialize)]
 pub struct SimpleModDir {
@@ -265,7 +265,10 @@ pub async fn apply_profile(state: tauri::State<'_, AppState>, id: i64) -> Result
         }
     }
 
-    // 3) Mark active profile
+    // 3) Invalidate detection cache (filesystem layout changed)
+    local_mod_detection::clear_detection_cache();
+
+    // 4) Mark active profile
     db.set_active_profile_id(Some(id))
         .map_err(|e| e.to_string())
 }
@@ -287,6 +290,8 @@ pub async fn clear_active_profile(state: tauri::State<'_, AppState>) -> Result<(
                 .map_err(|e| e.to_string())?;
         }
     }
+    // Invalidate detection cache after moving all directories back
+    local_mod_detection::clear_detection_cache();
     db.set_active_profile_id(None).map_err(|e| e.to_string())
 }
 

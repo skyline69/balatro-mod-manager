@@ -101,6 +101,30 @@ pub fn reindex_db(db: &Database) -> Result<(usize, usize), AppError> {
     for m in installed {
         let path = PathBuf::from(&m.path);
         if !path.exists() {
+            // Try to detect a move between Mods <-> Inactive Mods and heal path
+            let maybe_new = (|| -> Option<PathBuf> {
+                let file_name = Path::new(&m.path).file_name()?.to_owned();
+                let config_dir = dirs::config_dir()?;
+                let balatro = config_dir.join("Balatro");
+                let mods_dir = balatro.join("Mods");
+                let inactive_dir = balatro.join("Inactive Mods");
+                for cand in [mods_dir.join(&file_name), inactive_dir.join(&file_name)] {
+                    if cand.exists() && cand.is_dir() {
+                        return Some(cand);
+                    }
+                }
+                None
+            })();
+            if let Some(new_path) = maybe_new {
+                // Best-effort update; if it fails, fall back to removal
+                if db
+                    .update_installed_mod_path_by_path(&m.path, &new_path.to_string_lossy())
+                    .is_ok()
+                {
+                    continue;
+                }
+            }
+            // Remove if no target found
             db.remove_installed_mod(&m.name)?;
             cleaned_entries += 1;
         }

@@ -236,9 +236,15 @@ pub fn detect_manual_mods(
         .map(|m| normalize_path(&canonicalize_best_effort(&PathBuf::from(&m.path))))
         .collect();
 
-    // Create a set of managed mod names (lowercase) for duplicate detection
-    let managed_names: HashSet<String> =
+    // Create sets for managed names using robust normalization
+    // Some local detections may include spaces or minor formatting
+    // differences (e.g., "Joker Display" vs "JokerDisplay").
+    let managed_names_lower: HashSet<String> =
         managed_mods.iter().map(|m| m.name.to_lowercase()).collect();
+    let managed_name_keys: HashSet<String> = managed_mods
+        .iter()
+        .map(|m| normalize_key(&m.name))
+        .collect();
 
     let mut manual_mods = Vec::new();
     let mut bundled_dependencies = HashSet::new();
@@ -289,7 +295,9 @@ pub fn detect_manual_mods(
                 is_duplicate: false,
             };
             let mod_name_lower = talisman.name.to_lowercase();
-            if managed_names.contains(&mod_name_lower) {
+            if managed_names_lower.contains(&mod_name_lower)
+                || managed_name_keys.contains(&normalize_key(&talisman.name))
+            {
                 talisman.is_duplicate = true;
                 talisman.name = format!("{} (Manual)", talisman.name);
             }
@@ -304,22 +312,30 @@ pub fn detect_manual_mods(
 
         // If this mod is not managed by path, consider it a manual mod
         if !is_path_managed(&mod_path, &managed_paths) {
-            // If the mod is under Mods or Inactive Mods and its name matches a managed mod name,
-            // treat it as managed (do not surface as local), even if path drifted earlier.
+            // If the mod is under Mods or Inactive Mods and its name (or ID) matches a managed mod name
+            // using relaxed normalization, treat it as managed (do not surface as local), even if
+            // the stored DB path drifted earlier.
             let under_managed_root = {
                 let p = PathBuf::from(&mod_path);
                 let mods_root = config_dir.join("Balatro").join("Mods");
                 let inactive_root = config_dir.join("Balatro").join("Inactive Mods");
                 p.starts_with(&mods_root) || p.starts_with(&inactive_root)
             };
-            let mod_name_lower = mod_info.name.to_lowercase();
-            if under_managed_root && managed_names.contains(&mod_name_lower) {
+            let mod_name_key = normalize_key(&mod_info.name);
+            let mod_id_key = normalize_key(&mod_info.id);
+            if under_managed_root
+                && (managed_name_keys.contains(&mod_name_key)
+                    || (!mod_id_key.is_empty() && managed_name_keys.contains(&mod_id_key)))
+            {
                 // Skip: catalog-installed mod moved by profiles should not appear as local
                 continue;
             }
 
             // Check for name duplication with managed mods
-            if managed_names.contains(&mod_name_lower) {
+            if managed_names_lower.contains(&mod_info.name.to_lowercase())
+                || managed_name_keys.contains(&mod_name_key)
+                || (!mod_id_key.is_empty() && managed_name_keys.contains(&mod_id_key))
+            {
                 mod_info.is_duplicate = true;
                 // Append a suffix to the name
                 mod_info.name = format!("{} (Manual)", mod_info.name);
@@ -730,6 +746,16 @@ fn normalize_path(path: &Path) -> String {
 
 fn canonicalize_best_effort(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+// Create a normalization key for comparing mod identifiers/names more liberally.
+// Removes non-alphanumeric characters and lowercases, so
+// "Joker Display" matches "JokerDisplay".
+fn normalize_key(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
 }
 
 fn detect_mod_in_directory(mod_path: &Path) -> Result<Option<DetectedMod>, String> {

@@ -175,10 +175,55 @@ pub fn run() {
                     }
 
                     let end = (cursor_idx + REINDEX_BATCH_SIZE).min(snapshot.len());
-                    let mut cleaned = 0usize;
+                let mut cleaned = 0usize;
+                let mut healed = 0usize; // entries whose paths we updated instead of deleting
                     for (name, path) in &snapshot[cursor_idx..end] {
                         if !std::path::Path::new(path).exists() {
-                            // Remove missing entry from DB
+                            // Try to detect if the mod was moved between
+                            // 'Mods' and 'Inactive Mods' and update the DB path instead
+                            let old_path = std::path::PathBuf::from(path);
+                            let maybe_new_path = (|| -> Option<std::path::PathBuf> {
+                                let file_name = old_path.file_name()?;
+                                let config_dir = dirs::config_dir()?;
+                                let balatro_dir = config_dir.join("Balatro");
+                                let mods_dir = balatro_dir.join("Mods");
+                                let inactive_dir = balatro_dir.join("Inactive Mods");
+
+                                // Build candidates on both sides; we don't assume direction
+                                let candidates = [mods_dir.join(file_name), inactive_dir.join(file_name)];
+                                for cand in &candidates {
+                                    if cand.exists() && cand.is_dir() {
+                                        return Some(cand.clone());
+                                    }
+                                }
+                                None
+                            })();
+
+                            if let Some(new_path) = maybe_new_path {
+                                // Update DB to point at the new path (best-effort)
+                                match db.update_installed_mod_path_by_path(
+                                    &old_path.to_string_lossy(),
+                                    &new_path.to_string_lossy(),
+                                ) {
+                                    Ok(()) => {
+                                        // Path healed; do not remove this entry
+                                        healed += 1;
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Auto reindex: failed to update path for '{}' ({} -> {}): {}",
+                                            name,
+                                            old_path.display(),
+                                            new_path.display(),
+                                            e
+                                        );
+                                        // Fall through to removal below
+                                    }
+                                }
+                            }
+
+                            // No replacement path found; remove missing entry from DB
                             match db.remove_installed_mod(name) {
                                 Ok(()) => {
                                     cleaned += 1;
@@ -201,13 +246,15 @@ pub fn run() {
                         let _ = handle_for_events.emit("installed-mods-changed", ());
                     }
 
-                    if cleaned > 0 {
+                    if cleaned > 0 || healed > 0 {
                         // Clear detection cache so next detection reflects changes
                         local_mod_detection::clear_detection_cache();
                         log::info!(
-                            "Auto reindex: cleaned {} database entr{} (batch)",
+                            "Auto reindex: cleaned {} entr{}, healed {} path{} (batch)",
                             cleaned,
-                            if cleaned == 1 { "y" } else { "ies" }
+                            if cleaned == 1 { "y" } else { "ies" },
+                            healed,
+                            if healed == 1 { "" } else { "s" }
                         );
 
                         // Notify UI to refresh installed mods in real-time
