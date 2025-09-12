@@ -296,6 +296,7 @@
           bind:value={modFilter}
           onkeydown={(e: KeyboardEvent) => { if (e.key === 'Escape') modFilter = ''; }}
         />
+        <div class="toolbar-spacer" aria-hidden="true"></div>
         <div class="toolbar-actions">
           {#if allVisibleSelected}
             <button class="ghost" onclick={clearAllVisible}>Clear visible</button>
@@ -338,7 +339,8 @@
   /* Text selection theme for this view */
   ::selection { background: #fdcf51; color: #393646; }
   ::-moz-selection { background: #fdcf51; color: #393646; }
-  .profiles-root { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; height: 100%; overflow: hidden; }
+  :root { --sidebar-w: clamp(220px, 24vw, 320px); }
+  .profiles-root { display: grid; grid-template-columns: var(--sidebar-w) 1fr; gap: 1rem; height: 100%; overflow: hidden; }
   .profiles-list { background: transparent; border: none; border-radius: 0; padding: 1rem .75rem .75rem 0; display:flex; flex-direction:column; border-right: 2px solid #f4eee0; height: 100%; min-height: 0; position: relative; }
   .list { flex:1; overflow:auto; gap:.35rem; display:flex; flex-direction:column; min-height: 0; padding-right: .25rem; padding-bottom: 4.5rem; }
   .list .profile-row:first-child { margin-top: .4rem; }
@@ -386,11 +388,13 @@
   .small { font-family:"M6X11", sans-serif; font-size:1rem; padding:.35rem .6rem; border:2px solid #f4eee0; background:transparent; color:#f4eee0; border-radius:8px; cursor:pointer; }
   .ghost { background: transparent; opacity: .95; }
   .meta { font-family:"M6X11", sans-serif; opacity:.95; }
-  .toolbar { display:flex; gap:.5rem; align-items:center; margin: .35rem 0 .55rem; }
-  .filter-input { flex:1; min-width: 0; padding:.4rem .6rem; border:2px solid #f4eee0; border-radius:8px; background:transparent; color:#f4eee0; font-family:"M6X11", sans-serif; font-size: 1.15rem; }
+  .toolbar { display:grid; grid-template-columns: 1fr 16px auto; column-gap:0; row-gap:.35rem; align-items:center; margin: .35rem 0 .55rem; }
+  .toolbar-spacer { width: 16px; height: 1px; }
+  .filter-input { width:100%; min-width: 0; padding:.4rem .6rem; border:2px solid #f4eee0; border-radius:8px; background:transparent; color:#f4eee0; font-family:"M6X11", sans-serif; font-size: 1.05rem; }
   .filter-input:focus { outline: none; border-color:#fdcf51; box-shadow: 0 0 0 2px rgba(253,207,81,0.18); }
-  .toolbar-actions { display:flex; gap:.4rem; }
-  .mods-list { display:flex; flex-direction: column; gap:.55rem; overflow-y:auto; overflow-x:hidden; padding:.25rem .25rem 1.5rem 0; flex: 1; min-height: 0; position: relative; z-index: 0; }
+  .toolbar-actions { display:flex; gap:.5rem; justify-self: end; white-space: nowrap; }
+  /* Responsive grid for mod items */
+  .mods-list { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:.55rem; overflow-y:auto; overflow-x:hidden; padding:.25rem .25rem 1.5rem 0; flex: 1; min-height: 0; position: relative; z-index: 0; }
   .profile-mod-item {
     --bg1: #4f6367;
     --bg2: #334461;
@@ -470,7 +474,7 @@
   .detail-header .header-left .rename-cancel:active { transform: translateY(0); }
 
   /* Chips for Select/Clear visible */
-  .toolbar .ghost { background: transparent; color:#f4eee0; border:2px solid #f4eee0; border-radius: 9999px; padding: .35rem .75rem; font-family:"M6X11", sans-serif; font-size: 0.98rem; cursor: pointer; }
+  .toolbar .ghost { background: transparent; color:#f4eee0; border:2px solid #f4eee0; border-radius: 9999px; padding: .35rem .75rem; margin-left: 1rem; font-family:"M6X11", sans-serif; font-size: 0.98rem; cursor: pointer; }
   .toolbar .ghost:hover { background: rgba(244,238,224,0.12); transform: translateY(-1px); }
   .empty { color:#f4eee0; opacity:.9; padding:1rem; }
   /* Specific styles for Create/Cancel in the footer */
@@ -482,8 +486,26 @@
   .create-box .cancel-btn:active { transform: translateY(0); }
 
   @media (max-width: 1160px) {
-    .profiles-root { grid-template-columns: 1fr; }
+    .profiles-root { grid-template-columns: 1fr; height: auto; overflow: visible; }
     .detail-header { grid-template-columns: 1fr; }
     .header-right { justify-content: flex-start; flex-wrap: wrap; }
+  }
+
+  @media (max-width: 1280px) {
+    :root { --sidebar-w: clamp(200px, 22vw, 280px); }
+    .mods-list { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  }
+
+  @media (max-width: 980px) {
+    .profiles-list { border-right: none; border-bottom: 2px solid #f4eee0; padding: .75rem 0; height: auto; max-height: 40vh; overflow: auto; }
+    .profile-detail { padding: .75rem 0 0 0; height: auto; }
+    .toolbar { grid-template-columns: 1fr; }
+    .toolbar-spacer { display: none; }
+    .toolbar-actions { justify-self: start; }
+    .mods-list { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  }
+
+  @media (max-width: 720px) {
+    .detail-header .header-right button { padding: .4rem .6rem; font-size: .95rem; }
   }
 </style>
