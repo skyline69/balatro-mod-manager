@@ -34,7 +34,6 @@ impl ThumbnailManager {
         let semaphore = Arc::new(Semaphore::new(3));
         let client = reqwest::Client::builder()
             .user_agent("balatro-mod-manager/1.0")
-            .timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client");
 
@@ -73,12 +72,6 @@ impl ThumbnailManager {
                         Err(Backoff::RetryAfter(delay)) => {
                             // schedule retry after delay
                             req.attempts = req.attempts.saturating_add(1);
-                            if req.attempts > 3 {
-                                if let Ok(mut set) = enq_set.lock() {
-                                    set.remove(&req.title);
-                                }
-                                return;
-                            }
                             let title = req.title.clone();
                             tauri::async_runtime::spawn(async move {
                                 sleep(delay).await;
@@ -139,7 +132,6 @@ async fn fetch_and_store(
     title: &str,
     url: &str,
 ) -> Result<bool, Backoff> {
-    log::info!("Thumbnail fetch start: title='{}' url='{}'", title, url);
     // Don't waste network if already cached
     if file_exists_for_title(title) {
         return Ok(false);
@@ -167,7 +159,6 @@ async fn fetch_and_store(
                 // Disk error; drop silently
                 return Ok(false);
             }
-            log::info!("Thumbnail saved: title='{}'", title);
             Ok(true)
         }
         StatusCode::TOO_MANY_REQUESTS => {

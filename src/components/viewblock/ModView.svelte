@@ -92,7 +92,6 @@ import { openExternal } from "$lib/opener";
 	let loadingVersions = $state(false);
 let renderedDescription = $state("");
 let descLoading = $state(false);
-const attemptedDescriptions = new Set<string>();
 	let isLinux = false;
 
 	// Add a local state variable for tracking enabled status
@@ -620,24 +619,18 @@ let modView: HTMLDivElement;
 
     // Ensure description is loaded (lazy) for detail view
     async function ensureDescriptionLoaded(m: Mod & { _dirName?: string }) {
-        if (!m) return;
-        const cached = $descriptionsStore[m.title];
-        if (cached && cached.trim().length > 0) return;
-        if (attemptedDescriptions.has(m.title)) return;
+        if (!m || (descriptionText && descriptionText.trim().length > 0)) return;
         const dir = m._dirName as string | undefined;
         if (!dir) return;
-        attemptedDescriptions.add(m.title);
         try {
             descLoading = true;
             const text = await invoke<string>(
                 "get_description_cached_or_remote",
                 { title: m.title, dirName: dir }
             );
-            if (text && text.trim().length > 0) {
-                setDescription(m.title, text);
-                // Update currentModView store with new description for this view
-                currentModView.set({ ...m, description: text });
-            }
+            setDescription(m.title, text);
+            // Update currentModView store with new description for this view
+            currentModView.set({ ...m, description: text });
         } catch (_) {
             // ignore
         } finally {
@@ -649,7 +642,7 @@ let modView: HTMLDivElement;
     $effect(() => {
         const m = mod as Mod & { _dirName?: string };
         const desc = descriptionText;
-        if (m) {
+        if (m && (!desc || desc.trim().length === 0)) {
             ensureDescriptionLoaded(m);
         }
         if (desc) {
