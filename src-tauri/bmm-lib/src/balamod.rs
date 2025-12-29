@@ -281,14 +281,15 @@ fn normalize_mac_install_path(mut path: PathBuf) -> Option<PathBuf> {
                 bundle.clone()
             };
 
-            if let Some(parent) = bundle.parent()
-                && parent
+            if let Some(parent) = bundle.parent() {
+                if parent
                     .file_name()
                     .and_then(|n| n.to_str())
                     .map(|n| n.eq_ignore_ascii_case("Game"))
                     .unwrap_or(false)
-            {
-                candidate = parent.to_path_buf();
+                {
+                    candidate = parent.to_path_buf();
+                }
             }
 
             return Some(candidate);
@@ -348,10 +349,10 @@ fn find_balatro_love(path: &Path, depth: usize) -> Option<PathBuf> {
         }
 
         let nested_game = path.join("Contents/Game");
-        if nested_game.exists()
-            && let Some(found) = find_balatro_love(&nested_game, depth.saturating_sub(1))
-        {
-            return Some(found);
+        if nested_game.exists() {
+            if let Some(found) = find_balatro_love(&nested_game, depth.saturating_sub(1)) {
+                return Some(found);
+            }
         }
     }
 
