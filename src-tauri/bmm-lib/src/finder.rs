@@ -45,12 +45,12 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = vec![];
 
     // 1) Respect custom Balatro path from our database first
-    if let Ok(db) = Database::new() {
-        if let Ok(Some(custom_path)) = db.get_installation_path() {
-            let p = PathBuf::from(&custom_path);
-            if p.exists() {
-                paths.push(p);
-            }
+    if let Ok(db) = Database::new()
+        && let Ok(Some(custom_path)) = db.get_installation_path()
+    {
+        let p = PathBuf::from(&custom_path);
+        if p.exists() {
+            paths.push(p);
         }
     }
 
@@ -128,12 +128,12 @@ pub fn get_balatro_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = vec![];
 
     // Prefer custom DB path first
-    if let Ok(db) = Database::new() {
-        if let Ok(Some(custom_path)) = db.get_installation_path() {
-            let p = PathBuf::from(&custom_path);
-            if p.exists() {
-                paths.push(p);
-            }
+    if let Ok(db) = Database::new()
+        && let Ok(Some(custom_path)) = db.get_installation_path()
+    {
+        let p = PathBuf::from(&custom_path);
+        if p.exists() {
+            paths.push(p);
         }
     }
     match home::home_dir() {

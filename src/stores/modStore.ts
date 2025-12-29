@@ -42,6 +42,8 @@ export enum SortOption {
   NameDesc = "name_desc",
   LastUpdatedAsc = "updated_asc",
   LastUpdatedDesc = "updated_desc",
+  DownloadsAsc = "downloads_asc",
+  DownloadsDesc = "downloads_desc",
 }
 
 export const backgroundEnabled = writable(false);

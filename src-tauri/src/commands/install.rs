@@ -14,6 +14,7 @@ use std::path::PathBuf;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use std::process::Command;
 
+use crate::bmi::BmiClient;
 use crate::state::AppState;
 use crate::util::map_error;
 use bmm_lib::errors::AppError;
@@ -502,7 +503,16 @@ pub async fn install_mod(url: String, folder_name: String) -> Result<PathBuf, St
     } else {
         Some(folder_name)
     };
-    map_error(bmm_lib::installer::install_mod(url, folder_name).await)
+    let resolved_url = if let Some(id) = url.strip_prefix("bmi://") {
+        if id.trim().is_empty() {
+            return Err("BMI download missing mod id".to_string());
+        }
+        let client = BmiClient::new()?;
+        client.post_download(id).await?
+    } else {
+        url
+    };
+    map_error(bmm_lib::installer::install_mod(resolved_url, folder_name).await)
 }
 
 #[tauri::command]

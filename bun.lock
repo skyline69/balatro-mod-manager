@@ -26,7 +26,7 @@
         "globals": "^15.15.0",
         "lucide-svelte": "^0.483.0",
         "marked": "^15.0.12",
-        "svelte": "^5.46.0",
+        "svelte": "^5.46.1",
         "svelte-check": "^4.3.5",
         "svelte-confetti": "^2.3.2",
         "svelte-eslint-parser": "^0.41.1",

@@ -202,7 +202,7 @@ import { isLinuxPlatform } from "$lib/platform";
 				}
 			}
 
-			if (!url.startsWith("http")) {
+			if (!url.startsWith("http") && !url.startsWith("bmi://")) {
 				console.error("Invalid URL format:", url);
 				throw new Error(`Invalid URL format: ${url}`);
 			}

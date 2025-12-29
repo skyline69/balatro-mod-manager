@@ -1,3 +1,4 @@
+mod bmi;
 pub mod commands;
 mod lfs;
 mod models;

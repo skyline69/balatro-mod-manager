@@ -1,140 +1,53 @@
 use std::path::PathBuf;
 
+use crate::bmi::{self, BmiClient, SortMode, SyncCache};
 use crate::lfs::{LfsError, resolve_lfs_pointer_bytes};
 use crate::models::ModMeta;
 use bmm_lib::errors::AppError;
 use serde::{Deserialize, Serialize};
 
-const REPO_MEDIA_MAIN: &str =
-    "http://smallgit.dasguney.com:3000/skyline/balatro-mod-index/media/branch/main";
-const REPO_ARCHIVE_URL: &str =
-    "http://smallgit.dasguney.com:3000/skyline/balatro-mod-index/archive/main.tar.gz";
-
-fn mod_path_parts(path: &std::path::Path) -> Option<(String, String)> {
-    let comps: Vec<_> = path.components().collect();
-    for i in 0..comps.len() {
-        if comps[i].as_os_str() == std::ffi::OsStr::new("mods") {
-            if comps.len() < i + 3 {
-                return None;
-            }
-            let dir = match comps[i + 1] {
-                std::path::Component::Normal(n) => n.to_string_lossy().to_string(),
-                _ => return None,
-            };
-            let file = match comps[i + 2] {
-                std::path::Component::Normal(n) => n.to_string_lossy().to_string(),
-                _ => return None,
-            };
-            return Some((dir, file));
-        }
-    }
-    None
-}
+const BMI_CACHE_FILE: &str = "bmi_mods_cache";
 
 #[tauri::command]
 pub async fn list_repo_mods() -> Result<Vec<String>, String> {
-    use flate2::read::GzDecoder;
-    use std::collections::HashSet;
-    use std::io::Read;
-    use tar::Archive;
-
-    let resp = reqwest::get(REPO_ARCHIVE_URL)
-        .await
-        .map_err(|e| format!("Repo archive error: {}", e))?;
-    if !resp.status().is_success() {
-        return Err(format!("Repo archive status: {}", resp.status()));
-    }
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    let mut dec = GzDecoder::new(bytes.as_ref());
-    let mut tar_bytes = Vec::with_capacity(bytes.len());
-    dec.read_to_end(&mut tar_bytes)
-        .map_err(|e| format!("Archive decompress error: {}", e))?;
-    let mut archive = Archive::new(std::io::Cursor::new(tar_bytes));
-
-    let mut dirs: HashSet<String> = HashSet::new();
-    for entry in archive.entries().map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = match entry.path() {
-            Ok(p) => p.into_owned(),
-            Err(_) => continue,
-        };
-        if let Some((dir, _file)) = mod_path_parts(&path) {
-            dirs.insert(dir);
-        }
-    }
-    let mut out: Vec<String> = dirs.into_iter().collect();
+    let items = fetch_repo_mods(None).await?;
+    let mut out: Vec<String> = items.into_iter().map(|item| item.dir_name).collect();
     out.sort();
     Ok(out)
 }
 
 #[tauri::command]
 pub async fn get_repo_file(path: &str) -> Result<String, String> {
-    use tokio::time::{Duration, sleep};
-
-    // Encode path by segments so slashes remain
-    let encoded: String = path
-        .split('/')
-        .map(urlencoding::encode)
-        .map(|s| s.into_owned())
-        .collect::<Vec<_>>()
-        .join("/");
-
-    let url = format!("{}/{}", REPO_MEDIA_MAIN, encoded);
-
-    let client = reqwest::Client::new();
-    let mut delay = Duration::from_millis(250);
-    for attempt in 0..4 {
-        let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
-        if resp.status().is_success() {
-            let bytes = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-            let bytes = resolve_lfs_pointer_bytes(&client, bytes)
-                .await
-                .map_err(|e| format!("{e}"))?;
-            let text = String::from_utf8(bytes.to_vec())
-                .map_err(|e| format!("Invalid UTF-8 from repo: {e}"))?;
-            return Ok(text);
-        }
-        let code = resp.status().as_u16();
-        // 404/410: not found — no point retrying this URL
-        if code == 404 || code == 410 {
-            break;
-        }
-        // 429/5xx: temporary, retry after delay
-        if attempt < 3 {
-            sleep(delay).await;
-            delay = delay.saturating_mul(2);
-        }
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() < 3 || parts[0] != "mods" {
+        return Err("BMI repo file path unsupported".to_string());
     }
-    Err(format!("Failed to fetch {} after retries", path))
+    let id = parts[1];
+    let file = parts[2];
+    let client = BmiClient::new()?;
+    let detail = client.fetch_mod(id).await?;
+
+    match file {
+        "meta.json" => {
+            let meta = detail
+                .meta
+                .ok_or_else(|| "BMI mod missing meta".to_string())?;
+            serde_json::to_string(&meta).map_err(|e| e.to_string())
+        }
+        "description.md" => Ok(detail.description.unwrap_or_default()),
+        _ => Err(format!("Unsupported BMI repo file: {file}")),
+    }
 }
 
 #[allow(non_snake_case)]
 #[tauri::command]
 pub async fn get_repo_thumbnail_url(dirName: String) -> Result<Option<String>, String> {
-    // Try unencoded then encoded
-    let enc = urlencoding::encode(&dirName);
-    let candidates = [
-        format!("{}/mods/{}/thumbnail.jpg", REPO_MEDIA_MAIN, dirName),
-        format!("{}/mods/{}/thumbnail.jpg", REPO_MEDIA_MAIN, enc),
-    ];
-
-    use reqwest::header::RANGE;
-    let client = reqwest::Client::new();
-    for url in candidates {
-        let resp = client
-            .get(&url)
-            .header(RANGE, "bytes=0-0")
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        if resp.status().is_success() {
-            return Ok(Some(url));
-        }
-    }
-    Ok(None)
+    let client = BmiClient::new()?;
+    let url = client.thumbnail_url(&dirName)?;
+    Ok(Some(url))
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArchiveModItem {
     pub dir_name: String,
     pub meta: ModMeta,
@@ -142,196 +55,70 @@ pub struct ArchiveModItem {
     pub image_url: String,
 }
 
-// Fetch all mod metadata and descriptions via a single archive request.
-// LFS pointers are resolved via the Git LFS batch API when needed.
+// Fetch mod metadata and descriptions via the BMI HTTP service.
 #[tauri::command]
-pub async fn fetch_repo_mods() -> Result<Vec<ArchiveModItem>, String> {
-    use flate2::read::GzDecoder;
-    use std::time::Instant;
-    use tar::Archive;
+pub async fn fetch_repo_mods(sort: Option<String>) -> Result<Vec<ArchiveModItem>, String> {
+    let client = BmiClient::new()?;
+    client.check_health().await?;
+    let sort_mode = SortMode::from_optional(sort.clone());
+    let (cache_dir, cache_file) = bmi_cache_paths(sort.as_deref())?;
+    let cache = load_bmi_cache(&cache_file);
 
-    // Cache location in config dir (created lazily when writing)
+    let (mut items, mut latest_updated) = if let Some(existing) = cache.as_ref() {
+        (existing.items.clone(), existing.last_updated_at.clone())
+    } else {
+        (Vec::new(), None)
+    };
+    if items.iter().any(|item| {
+        let url = item.image_url.trim();
+        url.is_empty() || !(url.starts_with("http://") || url.starts_with("https://"))
+    }) {
+        items.clear();
+        latest_updated = None;
+    }
+
+    if items.is_empty() || latest_updated.is_none() {
+        let (fresh, updated_at) = client.fetch_all_mods(sort_mode).await?;
+        items = fresh;
+        latest_updated = updated_at;
+    } else if let Some(since) = latest_updated.clone() {
+        let (changed, updated_at) = client.fetch_changed_mods(&since, sort_mode).await?;
+        if !changed.is_empty() {
+            items = bmi::apply_changed(&items, changed, &client)?;
+        }
+        latest_updated = bmi::pick_latest_updated(latest_updated, updated_at);
+    }
+
+    // Persist cache for future incremental sync
+    let cache_state = SyncCache {
+        last_updated_at: latest_updated,
+        items: items.clone(),
+    };
+    let _ = std::fs::create_dir_all(&cache_dir);
+    if let Ok(f) = std::fs::File::create(&cache_file) {
+        let _ = serde_json::to_writer_pretty(f, &cache_state);
+    }
+
+    Ok(items)
+}
+
+fn bmi_cache_paths(sort: Option<&str>) -> Result<(PathBuf, PathBuf), String> {
     let config_dir = dirs::config_dir()
         .ok_or_else(|| AppError::DirNotFound(PathBuf::from("config directory")).to_string())?;
     let cache_dir = config_dir.join("Balatro").join("mod_index_cache");
-    let cache_file = cache_dir.join("mod_index_archive.json");
+    let suffix = sort
+        .unwrap_or("default")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+    let cache_file = cache_dir.join(format!("{BMI_CACHE_FILE}_{suffix}.json"));
+    Ok((cache_dir, cache_file))
+}
 
-    #[derive(Serialize, Deserialize)]
-    struct ArchiveCache {
-        etag: Option<String>,
-        branch: String,
-        items: Vec<ArchiveModItem>,
-    }
-
-    // Try to load existing cache to get ETag and for offline fallback
-    let existing_cache: Option<ArchiveCache> = std::fs::File::open(&cache_file)
+fn load_bmi_cache(cache_file: &PathBuf) -> Option<SyncCache> {
+    std::fs::File::open(cache_file)
         .ok()
-        .and_then(|f| serde_json::from_reader::<_, ArchiveCache>(f).ok());
-
-    let url = REPO_ARCHIVE_URL;
-
-    // Download archive stream
-    use reqwest::header::IF_NONE_MATCH;
-    let client = reqwest::Client::new();
-    let mut received_etag: Option<String> = None;
-    let mut req = client.get(url);
-    if let Some(c) = &existing_cache
-        && let Some(et) = &c.etag
-    {
-        req = req.header(IF_NONE_MATCH, et);
-    }
-    let mut resp = req
-        .send()
-        .await
-        .map_err(|e| format!("Repo archive request error: {e}"))?;
-    if resp.status().as_u16() == 304 {
-        if let Some(c) = existing_cache {
-            if !c.items.is_empty() {
-                log::info!(
-                    "Repo archive 304 Not Modified, using cached items: {}",
-                    c.items.len()
-                );
-                return Ok(c.items);
-            }
-            log::info!("Repo archive 304 with empty cache; refetching archive");
-        }
-        resp = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("Repo archive retry error: {e}"))?;
-    }
-    if !resp.status().is_success() {
-        return Err(format!("Repo archive status: {}", resp.status()));
-    }
-    if let Some(et) = resp.headers().get(reqwest::header::ETAG)
-        && let Ok(s) = et.to_str()
-    {
-        received_etag = Some(s.to_string());
-    }
-
-    // Stream download to a temp file to avoid holding the full archive in memory.
-    let tmp_path = cache_dir.join("mods_archive.tmp");
-    // Ensure directory exists before writing temp archive
-    let _ = std::fs::create_dir_all(&cache_dir);
-    {
-        use tokio::io::AsyncWriteExt;
-        let mut file = tokio::fs::File::create(&tmp_path)
-            .await
-            .map_err(|e| format!("Failed to create temp archive file: {e}"))?;
-        let mut stream = resp.bytes_stream();
-        while let Some(chunk) = tokio_stream::StreamExt::next(&mut stream).await {
-            let bytes = chunk.map_err(|e| format!("Download error: {e}"))?;
-            file.write_all(&bytes)
-                .await
-                .map_err(|e| format!("Failed writing archive: {e}"))?;
-        }
-        file.sync_all()
-            .await
-            .map_err(|e| format!("Failed to flush archive: {e}"))?;
-    }
-
-    // Decompress and iterate entries from disk
-    let parse_start = Instant::now();
-    let file =
-        std::fs::File::open(&tmp_path).map_err(|e| format!("Failed to reopen archive: {e}"))?;
-    let gz = GzDecoder::new(file);
-    let mut archive = Archive::new(gz);
-
-    let mut dir_set: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    for entry in archive.entries().map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = match entry.path() {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-
-        let (dir_name, filename) = match mod_path_parts(&path) {
-            Some(parts) => parts,
-            None => continue,
-        };
-        if filename == "meta.json" || filename == "description.md" {
-            dir_set.insert(dir_name);
-        }
-    }
-
-    // Build result by fetching meta/description via raw URLs with LFS pointer resolution.
-    use futures::{StreamExt, stream};
-    let client = reqwest::Client::new();
-    let concurrency = 12usize;
-    let results = stream::iter(dir_set.into_iter())
-        .map(|dir| {
-            let client = client.clone();
-            async move {
-                let dir_name = dir.clone();
-                let dir_enc = urlencoding::encode(&dir_name).into_owned();
-                let meta_url = format!("{}/mods/{}/meta.json", REPO_MEDIA_MAIN, dir_enc);
-                let desc_url = format!("{}/mods/{}/description.md", REPO_MEDIA_MAIN, dir_enc);
-
-                let meta = match client.get(&meta_url).send().await {
-                    Ok(resp) if resp.status().is_success() => {
-                        let bytes = resp.bytes().await.ok()?.to_vec();
-                        let bytes = resolve_lfs_pointer_bytes(&client, bytes).await.ok()?;
-                        let text = String::from_utf8(bytes).ok()?;
-                        serde_json::from_str::<ModMeta>(&text).ok()?
-                    }
-                    _ => return None,
-                };
-
-                let description = match client.get(&desc_url).send().await {
-                    Ok(resp) if resp.status().is_success() => {
-                        let bytes = resp.bytes().await.ok()?.to_vec();
-                        let bytes = resolve_lfs_pointer_bytes(&client, bytes).await.ok()?;
-                        String::from_utf8(bytes).unwrap_or_default()
-                    }
-                    _ => String::new(),
-                };
-
-                Some(ArchiveModItem {
-                    dir_name,
-                    meta,
-                    description,
-                    image_url: format!("{}/mods/{}/thumbnail.jpg", REPO_MEDIA_MAIN, dir_enc),
-                })
-            }
-        })
-        .buffer_unordered(concurrency)
-        .collect::<Vec<_>>()
-        .await;
-
-    let mut out: Vec<ArchiveModItem> = results.into_iter().flatten().collect();
-
-    // Sort by title asc for stability
-    out.sort_by(|a, b| {
-        a.meta
-            .title
-            .to_lowercase()
-            .cmp(&b.meta.title.to_lowercase())
-    });
-
-    log::info!(
-        "Parsed {} mods from archive in {} ms",
-        out.len(),
-        parse_start.elapsed().as_millis()
-    );
-
-    // Save cache with ETag for future 304 validations
-    let cache = ArchiveCache {
-        etag: received_etag,
-        branch: "main".to_string(),
-        items: out.clone(),
-    };
-    // Ensure directory exists before writing
-    let _ = std::fs::create_dir_all(&cache_dir);
-    if let Ok(f) = std::fs::File::create(&cache_file) {
-        let _ = serde_json::to_writer_pretty(f, &cache);
-    }
-
-    // Clean up temp archive
-    let _ = std::fs::remove_file(&tmp_path);
-
-    Ok(out)
+        .and_then(|f| serde_json::from_reader::<_, SyncCache>(f).ok())
 }
 
 fn is_legal_char(c: char) -> bool {
@@ -447,6 +234,7 @@ pub async fn cache_thumbnail_from_url(
     }
 
     // Enqueue background fetch with 429-aware backoff; return immediately
+    log::info!("Thumbnail enqueue: title='{}' url='{}'", title, url);
     state.thumbs.enqueue(title, url);
     Ok(false)
 }
@@ -480,37 +268,34 @@ pub async fn get_cached_installed_thumbnail(
     }
 
     // Not cached yet: try to download from repo raw and store.
-    let client = reqwest::Client::new();
-    let enc = urlencoding::encode(&dir_name);
-    let url = format!("{}/mods/{}/thumbnail.jpg", REPO_MEDIA_MAIN, enc);
-    if let Ok(resp) = client.get(&url).send().await {
-        if resp.status().is_success() {
-            if let Ok(bytes) = resp.bytes().await {
-                let bytes = bytes.to_vec();
-                let bytes = match resolve_lfs_pointer_bytes(&client, bytes).await {
-                    Ok(resolved) => resolved,
-                    Err(LfsError::Retryable(_)) => {
-                        state.thumbs.enqueue(title.clone(), url.to_string());
-                        return Ok(None);
-                    }
-                    Err(_) => return Ok(None),
-                };
-                // Persist and return
-                std::fs::write(&path, &bytes).map_err(|e| {
-                    AppError::FileWrite {
-                        path: path.clone(),
-                        source: e.to_string(),
-                    }
-                    .to_string()
-                })?;
-                return Ok(Some(
-                    path.to_str()
-                        .ok_or_else(|| "Failed to convert thumbnail path".to_string())?
-                        .to_string(),
-                ));
-            }
-        } else if resp.status().as_u16() == 429 {
-            // Handle rate limiting in the background; keep UI unblocked
+    let client = BmiClient::new()?;
+    let url = client.thumbnail_url(&dir_name)?;
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    match client.get_bytes(parsed).await {
+        Ok(bytes) => {
+            let bytes = match resolve_lfs_pointer_bytes(client.http_client(), bytes).await {
+                Ok(resolved) => resolved,
+                Err(LfsError::Retryable(_)) => {
+                    state.thumbs.enqueue(title.clone(), url.to_string());
+                    return Ok(None);
+                }
+                Err(_) => return Ok(None),
+            };
+            std::fs::write(&path, &bytes).map_err(|e| {
+                AppError::FileWrite {
+                    path: path.clone(),
+                    source: e.to_string(),
+                }
+                .to_string()
+            })?;
+            return Ok(Some(
+                path.to_str()
+                    .ok_or_else(|| "Failed to convert thumbnail path".to_string())?
+                    .to_string(),
+            ));
+        }
+        Err(_) => {
+            // Defer retry to the background queue for rate limits or transient failures.
             state.thumbs.enqueue(title.clone(), url.to_string());
         }
     }
@@ -529,34 +314,36 @@ pub async fn get_description_cached_or_remote(
 
     // Always prefer cached copy if present
     if path.exists() {
-        return std::fs::read_to_string(&path).map_err(|e| {
+        let cached = std::fs::read_to_string(&path).map_err(|e| {
             AppError::FileRead {
-                path,
+                path: path.clone(),
                 source: e.to_string(),
             }
             .to_string()
-        });
+        })?;
+        if !cached.trim().is_empty() {
+            return Ok(cached);
+        }
     }
 
-    // Fetch from repo raw
-    let client = reqwest::Client::new();
-    let enc = urlencoding::encode(&dir_name);
-    let url = format!("{}/mods/{}/description.md", REPO_MEDIA_MAIN, enc);
-    if let Ok(resp) = client.get(&url).send().await
-        && resp.status().is_success()
-        && let Ok(bytes) = resp.bytes().await
-    {
-        let bytes = resolve_lfs_pointer_bytes(&client, bytes.to_vec())
-            .await
-            .map_err(|e| e.to_string())?;
-        let text = String::from_utf8(bytes).map_err(|e| format!("Invalid UTF-8: {e}"))?;
-        // Cache for future sessions regardless of install state
-        if let Err(e) = std::fs::write(&path, &text) {
-            log::warn!("Failed to cache description for {}: {}", title, e);
-        }
-        return Ok(text);
+    let client = BmiClient::new()?;
+    log::info!("Description fetch: title='{}' id='{}'", title, dir_name);
+    let detail = client.fetch_mod(&dir_name).await?;
+    let text = match detail.description_html.as_deref() {
+        Some(desc) if !desc.trim().is_empty() => desc.to_string(),
+        _ => match detail.description.as_deref() {
+            Some(desc) if !desc.trim().is_empty() => desc.to_string(),
+            _ => detail.summary.clone().unwrap_or_default(),
+        },
+    };
+    if let Err(e) = std::fs::write(&path, &text) {
+        log::warn!("Failed to cache description for {}: {}", title, e);
     }
-    Err(format!("Description not found for {}", dir_name))
+    log::info!("Description loaded: title='{}' len={}", title, text.len());
+    if text.trim().is_empty() {
+        log::warn!("Description empty after fetch: title='{}'", title);
+    }
+    Ok(text)
 }
 
 #[tauri::command]
@@ -604,10 +391,7 @@ pub async fn batch_fetch_thumbnails_repo(inputs: Vec<ModThumbInput>) -> Result<u
         return Ok(0);
     }
 
-    let client = reqwest::Client::builder()
-        .user_agent("balatro-mod-manager/1.0")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = BmiClient::new()?;
 
     let concurrency = 8usize;
     let saved = stream::iter(pending.into_iter())
@@ -615,15 +399,16 @@ pub async fn batch_fetch_thumbnails_repo(inputs: Vec<ModThumbInput>) -> Result<u
             let client = client.clone();
             let thumbs_dir = thumbs_dir.clone();
             async move {
-                let url = format!(
-                    "{}/mods/{}/thumbnail.jpg",
-                    REPO_MEDIA_MAIN,
-                    urlencoding::encode(&m.dir_name)
-                );
-                if let Ok(resp) = client.get(&url).send().await
-                    && resp.status().is_success()
-                    && let Ok(bytes) = resp.bytes().await
-                    && let Ok(bytes) = resolve_lfs_pointer_bytes(&client, bytes.to_vec()).await
+                let url = match client.thumbnail_url(&m.dir_name) {
+                    Ok(url) => url,
+                    Err(_) => return 0u32,
+                };
+                let parsed = match reqwest::Url::parse(&url) {
+                    Ok(url) => url,
+                    Err(_) => return 0u32,
+                };
+                if let Ok(bytes) = client.get_bytes(parsed).await
+                    && let Ok(bytes) = resolve_lfs_pointer_bytes(client.http_client(), bytes).await
                 {
                     let slug = safe_slug(&m.title);
                     let path = thumbs_dir.join(format!("{slug}.jpg"));
