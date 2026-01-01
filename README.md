@@ -183,12 +183,14 @@ Would like to contribute by adding a mod that you couldn't find on the manager?
 
 Feel free to check the [Balatro Mod Index](https://github.com/skyline69/balatro-mod-index) repo and look at the README to know how to process.
 
-# Listing your mod with Mod Manager
->Is your Mod missing from ModManager?
+# Listing Your Mod with Balatro Mod Manager
 
-This program makes use of a list of mods served from another GitHub Repository, which explains why your new mod may not appear in the app.
+> Is your mod missing from BMM?
 
-Fortunately, this is an easy fix!  Just add your mod to the central list by sending a pull request to the Balatro Mod Index project, found here [Balatro Mod Index](https://github.com/skyline69/balatro-mod-index).
+This application uses a central list of mods hosted in a separate GitHub repository. Because of this, newly created mods may not appear in the app automatically.
+
+Fortunately, this is easy to fix. Add your mod to the central list by submitting a pull request to the Balatro Mod Index repository, available here:
+https://github.com/skyline69/balatro-mod-index
 
 # Code Signing
 
