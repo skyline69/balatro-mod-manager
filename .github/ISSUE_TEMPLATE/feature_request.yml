@@ -1,0 +1,49 @@
+name: Request a Feature
+description: Request a new feature or a change to an existing one.
+labels: [ "feature" ]
+body:
+  - type: checkboxes
+    attributes:
+      label: Mod Suggestion
+      description: |
+        The Mod manager repository is for features of *Mod manager*, not individual mods created by other developers.
+        When submitting a feature request, please make sure that the feature is *actually* related to ***Mod Manager itself*** and not to a mod or mod combination.
+        Failing to do this will get your issue *closed without explanation*. (THIS ISSUE TEMPLATE WAS TAKEN FROM [GEODE WITH PERMISSION!](https://github.com/geode-sdk/geode/issues/2092#issuecomment-4626537914))
+      options:
+        - label: I confirm that this feature is NOT related to a mod but directly to the mod manager itself.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mod manager Version
+      description: The version of Mod manager you were using when this bug was encountered. If you do not know where to find this, look in the bottom right of the manager.
+      placeholder: "Example: v0.5.4"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Related Problem
+      description: If the feature you wish to change is related to a problem, please describe it. Leave this field blank if it is not related to a problem.
+      placeholder: "Example: I'm always frustrated when..."
+    validations:
+      required: false
+  - type: textarea
+    id: solution
+    attributes:
+      label: Your Solution
+      description: Describe the solution you would like to have happen.
+      placeholder: "Example: If I could..."
+    validations:
+      required: true
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any additional information you wish to provide. Please add anything which did not fit into the other sections here.
+      placeholder: "Example: This is likely achievable by doing X because..."
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: Thank you for taking the time to fill out this feature request.

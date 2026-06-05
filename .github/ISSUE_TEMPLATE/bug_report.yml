@@ -1,0 +1,68 @@
+name: Bug Report
+description: Report a Mod Manager bug (not mods themselves) where something is not working as expected in Mod Loader (not mods created by others).
+labels: [ "unverified", "bug" ]
+body:
+  - type: checkboxes
+    attributes:
+      label: Mod Issue
+      description: |
+        The Mod manager repository is for issues of *Mod manager*, not individual mods created by other developers.
+        When submitting a bug report, please make sure that the bug is *actually* related to ***Mod Manager itself*** and not to a mod or mod combination.
+        Failing to do this will get your issue *closed without explanation*. (THIS ISSUE TEMPLATE WAS TAKEN FROM [GEODE WITH PERMISSION!](https://github.com/geode-sdk/geode/issues/2092#issuecomment-4626537914))
+      options:
+        - label: I confirm that this bug is NOT related to a mod but directly to the mod manager itself.
+          required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: The platform you were using when this bug was encountered.
+      options:
+        - "MacOS"
+        - "Windows"
+        - "Linux"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mod manager version
+      description: The version of Mod manager you were using when this bug was encountered. If you do not know where to find this. Look in the bottom right of the manager.
+      placeholder: "Example: v0.4.1"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen. Attach screenshots here as necessary.
+      placeholder: "Example: Expected mod to do X and not Y."
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Actual Behavior
+      description: What happened despite your expectations. Attach screenshots here as necessary.
+      placeholder: "Example: Mod instead did Y instead of X."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How to reproduce the bug.
+      placeholder: "Example: 1) I did X..."
+    validations:
+      required: true
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any additional information you wish to provide. Please add anything which did not fit into the other sections here.
+      placeholder: "Example: This is likely caused by X because..."
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: Thank you for taking the time to fill out this bug report. 
