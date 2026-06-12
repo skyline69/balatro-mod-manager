@@ -70,8 +70,16 @@ fn compute_fingerprint(mods_dir: &Path) -> ScanFingerprint {
     if let Ok(entries) = dir_iter {
         for entry in entries.flatten() {
             let p = entry.path();
-            // only consider dirs; files like .lovelyignore don't dramatically affect list
-            if !p.is_dir() {
+            // Consider directories and top-level `.zip` mod archives (Steamodded
+            // loads zipped mods directly). Other files (e.g. .lovelyignore) are
+            // ignored as they don't change the detected-mod list.
+            let is_dir = p.is_dir();
+            let is_zip = !is_dir
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.eq_ignore_ascii_case("zip"))
+                    .unwrap_or(false);
+            if !is_dir && !is_zip {
                 continue;
             }
             if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
@@ -1464,6 +1472,27 @@ fn detect_mods_recursive(
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
+        // Detect zipped mods (Steamodded loads `.zip` archives without extracting).
+        if path.is_file()
+            && path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("zip"))
+                .unwrap_or(false)
+        {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                let lower = file_name.to_lowercase();
+                // Skip Lovely's own archive and hidden/system files.
+                if lower.contains("lovely") || lower.starts_with('.') {
+                    continue;
+                }
+            }
+            if let Some(detected_mod) = detect_mod_in_zip(&path)? {
+                detected_mods.push(detected_mod);
+            }
+            continue;
+        }
+
         if !path.is_dir() {
             continue;
         }
@@ -1827,13 +1856,18 @@ fn parse_mod_json(json_path: &Path, mod_path: &Path) -> Result<Option<DetectedMo
         }
     };
 
+    parse_mod_json_content(&content, mod_path)
+}
+
+/// Parse mod info from raw JSON content (shared by on-disk files and zip entries).
+fn parse_mod_json_content(content: &str, mod_path: &Path) -> Result<Option<DetectedMod>, String> {
     // Strip trailing commas (common in hand-authored JSON)
-    let sanitized = strip_trailing_commas(&content);
+    let sanitized = strip_trailing_commas(content);
 
     let mod_json: ModJson = match serde_json::from_str(&sanitized) {
         Ok(json) => json,
         Err(e) => {
-            log::debug!("Failed to parse JSON file {}: {}", json_path.display(), e);
+            log::debug!("Failed to parse mod JSON in {}: {}", mod_path.display(), e);
             return Ok(None);
         }
     };
@@ -1910,47 +1944,76 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         return Ok(None);
     }
 
-    // Check if any line has the header marker
+    match parse_steamodded_header_lines(&lines) {
+        Some(fields) => {
+            // Header present: fall back to the Lua file's stem for missing fields.
+            let name_hint = lua_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            Ok(Some(finalize_lua_mod(
+                fields,
+                &mod_path.to_string_lossy(),
+                name_hint,
+            )))
+        }
+        None => {
+            // No header: infer mod info from the directory name.
+            if let Some(mod_name) = mod_path.file_name().and_then(|n| n.to_str()) {
+                return Ok(Some(DetectedMod {
+                    name: mod_name.to_string(),
+                    id: mod_name.to_string().replace(" ", ""),
+                    author: vec!["Unknown".to_string()],
+                    description: format!("Local mod found in {}", mod_path.display()),
+                    prefix: if mod_name.len() >= 4 {
+                        mod_name[0..4].to_lowercase()
+                    } else {
+                        mod_name.to_lowercase()
+                    },
+                    version: None,
+                    path: mod_path.to_string_lossy().to_string(),
+                    dependencies: Vec::new(),
+                    conflicts: Vec::new(),
+                    catalog_match: None,
+                    is_duplicate: false,
+                }));
+            }
+            Ok(None)
+        }
+    }
+}
+
+/// Fields parsed from a Steamodded Lua header block.
+struct LuaHeaderFields {
+    name: String,
+    id: String,
+    author: Vec<String>,
+    description: String,
+    prefix: String,
+    version: Option<String>,
+    dependencies: Vec<String>,
+    conflicts: Vec<String>,
+}
+
+/// Parse `--- KEY: value` Steamodded header lines. Returns `None` when the
+/// `--- STEAMODDED HEADER` marker is absent.
+fn parse_steamodded_header_lines(lines: &[String]) -> Option<LuaHeaderFields> {
     let has_header = lines
         .iter()
         .any(|line| line.trim() == "--- STEAMODDED HEADER");
     if !has_header {
-        // Try to infer mod info from filename if no header
-        if let Some(mod_name) = mod_path.file_name().and_then(|n| n.to_str()) {
-            // Simple inference based on directory name
-            return Ok(Some(DetectedMod {
-                name: mod_name.to_string(),
-                id: mod_name.to_string().replace(" ", ""),
-                author: vec!["Unknown".to_string()],
-                description: format!("Local mod found in {}", mod_path.display()),
-                prefix: if mod_name.len() >= 4 {
-                    mod_name[0..4].to_lowercase()
-                } else {
-                    mod_name.to_lowercase()
-                },
-                version: None,
-                path: mod_path.to_string_lossy().to_string(),
-                dependencies: Vec::new(),
-                conflicts: Vec::new(),
-                catalog_match: None,
-                is_duplicate: false,
-            }));
-        }
-        return Ok(None);
+        return None;
     }
 
-    // Parse the rest as before...
-    let mut name = String::new();
-    let mut id = String::new();
-    let mut author = Vec::new();
-    let mut description = String::new();
-    let mut prefix = String::new();
-    let mut version = None;
-    let mut dependencies = Vec::new();
-    let mut conflicts = Vec::new();
+    let mut fields = LuaHeaderFields {
+        name: String::new(),
+        id: String::new(),
+        author: Vec::new(),
+        description: String::new(),
+        prefix: String::new(),
+        version: None,
+        dependencies: Vec::new(),
+        conflicts: Vec::new(),
+    };
 
-    // Parse the header lines
-    for line in &lines {
+    for line in lines {
         let line = line.trim();
         if !line.starts_with("---") {
             continue;
@@ -1959,9 +2022,9 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         let line = &line[3..].trim();
 
         if let Some(value) = line.strip_prefix("MOD_NAME:") {
-            name = value.trim().to_string();
+            fields.name = value.trim().to_string();
         } else if let Some(value) = line.strip_prefix("MOD_ID:") {
-            id = value.trim().to_string();
+            fields.id = value.trim().to_string();
         } else if let Some(value) = line.strip_prefix("MOD_AUTHOR:") {
             // Parse author list [Author1, Author2, ...] and strip quotes
             if let Some(author_str) = value
@@ -1969,17 +2032,17 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
             {
-                author = author_str
+                fields.author = author_str
                     .split(',')
                     .map(|s| strip_quotes(s.trim()))
                     .collect();
             }
         } else if let Some(value) = line.strip_prefix("MOD_DESCRIPTION:") {
-            description = value.trim().to_string();
+            fields.description = value.trim().to_string();
         } else if let Some(value) = line.strip_prefix("PREFIX:") {
-            prefix = value.trim().to_string();
+            fields.prefix = value.trim().to_string();
         } else if let Some(value) = line.strip_prefix("VERSION:") {
-            version = Some(value.trim().to_string());
+            fields.version = Some(value.trim().to_string());
         } else if let Some(value) = line.strip_prefix("DEPENDENCIES:") {
             // Parse dependencies list
             if let Some(deps_str) = value
@@ -1987,7 +2050,7 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
             {
-                dependencies = deps_str
+                fields.dependencies = deps_str
                     .split(',')
                     .map(|s| strip_quotes(s.trim()))
                     .collect();
@@ -1999,7 +2062,7 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
             {
-                conflicts = conf_str
+                fields.conflicts = conf_str
                     .split(',')
                     .map(|s| strip_quotes(s.trim()))
                     .collect();
@@ -2007,46 +2070,171 @@ fn parse_mod_lua_header(lua_path: &Path, mod_path: &Path) -> Result<Option<Detec
         }
     }
 
-    // If we couldn't find required fields, try to infer from the directory/file name
-    if name.is_empty()
-        && let Some(file_name) = lua_path.file_stem().and_then(|s| s.to_str())
-    {
-        name = file_name.to_string();
+    Some(fields)
+}
+
+/// Build a `DetectedMod` from parsed header fields, inferring any missing
+/// required fields from `name_hint` and using `path_str` as the mod path.
+fn finalize_lua_mod(mut fields: LuaHeaderFields, path_str: &str, name_hint: &str) -> DetectedMod {
+    if fields.name.is_empty() {
+        fields.name = name_hint.to_string();
     }
 
-    if id.is_empty()
-        && let Some(file_name) = lua_path.file_stem().and_then(|s| s.to_str())
-    {
-        id = file_name.replace(" ", "");
+    if fields.id.is_empty() {
+        fields.id = name_hint.replace(" ", "");
     }
 
-    if author.is_empty() {
-        author.push("Unknown".to_string());
+    if fields.author.is_empty() {
+        fields.author.push("Unknown".to_string());
     }
 
-    if description.is_empty() {
-        description = format!("Local mod found in {}", mod_path.display());
+    if fields.description.is_empty() {
+        fields.description = format!("Local mod found in {path_str}");
     }
 
     // If prefix is empty, use first 4 letters of ID
-    if prefix.is_empty() && !id.is_empty() {
-        if id.len() >= 4 {
-            prefix = id[0..4].to_lowercase();
+    if fields.prefix.is_empty() && !fields.id.is_empty() {
+        fields.prefix = if fields.id.len() >= 4 {
+            fields.id[0..4].to_lowercase()
         } else {
-            prefix = id.to_lowercase();
+            fields.id.to_lowercase()
+        };
+    }
+
+    DetectedMod {
+        name: fields.name,
+        id: fields.id,
+        author: fields.author,
+        description: fields.description,
+        prefix: fields.prefix,
+        version: fields.version,
+        path: path_str.to_string(),
+        dependencies: fields.dependencies,
+        conflicts: fields.conflicts,
+        catalog_match: None,
+        is_duplicate: false,
+    }
+}
+
+/// Read a single zip entry's contents as a (lossy) UTF-8 string, skipping
+/// entries that are missing or unreasonably large.
+fn read_zip_entry_to_string<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Option<String> {
+    use std::io::Read;
+    // Guard against pathologically large metadata entries.
+    const MAX_ENTRY_BYTES: u64 = 4 * 1024 * 1024;
+    let mut file = archive.by_name(name).ok()?;
+    if file.size() > MAX_ENTRY_BYTES {
+        return None;
+    }
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// Detect a mod packaged as a `.zip` archive placed directly in the Mods folder.
+///
+/// Steamodded/Lovely load such archives without extracting them, but BMM
+/// previously only scanned directories, so zipped mods were invisible in the
+/// manager (issue #386). We peek inside the archive for Steamodded metadata
+/// (`metadata.json`/`mod.json`) or a Lua header, falling back to the archive
+/// file name so the mod is still surfaced.
+fn detect_mod_in_zip(zip_path: &Path) -> Result<Option<DetectedMod>, String> {
+    let file = match File::open(zip_path) {
+        Ok(f) => f,
+        Err(e) => {
+            log::debug!("Failed to open zip {}: {}", zip_path.display(), e);
+            return Ok(None);
+        }
+    };
+    let mut archive = match zip::ZipArchive::new(BufReader::new(file)) {
+        Ok(a) => a,
+        Err(e) => {
+            log::debug!("Failed to read zip {}: {}", zip_path.display(), e);
+            return Ok(None);
+        }
+    };
+
+    // Collect candidate metadata files inside the archive.
+    let mut json_candidates: Vec<String> = Vec::new();
+    let mut lua_candidates: Vec<String> = Vec::new();
+    for i in 0..archive.len() {
+        let name = match archive.by_index(i) {
+            Ok(f) if f.is_file() => f.name().to_string(),
+            _ => continue,
+        };
+        let base = name.rsplit('/').next().unwrap_or(&name).to_lowercase();
+        if base.ends_with(".json") {
+            json_candidates.push(name);
+        } else if base.ends_with(".lua") {
+            lua_candidates.push(name);
         }
     }
 
+    // A zip with neither Lua nor JSON is almost certainly not a Balatro mod.
+    if json_candidates.is_empty() && lua_candidates.is_empty() {
+        return Ok(None);
+    }
+
+    // Prefer Steamodded metadata/config JSON, then any other JSON.
+    json_candidates.sort_by_key(|n| {
+        let base = n.rsplit('/').next().unwrap_or(n).to_lowercase();
+        match base.as_str() {
+            "metadata.json" | "mod.json" => 0,
+            "manifest.json" => 2, // Thunderstore manifest: lowest priority
+            _ => 1,
+        }
+    });
+
+    for entry_name in &json_candidates {
+        let Some(content) = read_zip_entry_to_string(&mut archive, entry_name) else {
+            continue;
+        };
+        if let Some(detected) = parse_mod_json_content(&content, zip_path)? {
+            return Ok(Some(detected));
+        }
+    }
+
+    // Fall back to a Lua file carrying a Steamodded header.
+    for entry_name in &lua_candidates {
+        if let Some(content) = read_zip_entry_to_string(&mut archive, entry_name) {
+            let lines: Vec<String> = content.lines().take(20).map(|s| s.to_string()).collect();
+            if let Some(fields) = parse_steamodded_header_lines(&lines) {
+                let name_hint = Path::new(entry_name)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                return Ok(Some(finalize_lua_mod(
+                    fields,
+                    &zip_path.to_string_lossy(),
+                    name_hint,
+                )));
+            }
+        }
+    }
+
+    // Last resort: surface the mod using the archive's file name.
+    let stem = zip_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown Mod")
+        .to_string();
     Ok(Some(DetectedMod {
-        name,
-        id,
-        author,
-        description,
-        prefix,
-        version,
-        path: mod_path.to_string_lossy().to_string(),
-        dependencies,
-        conflicts,
+        name: stem.clone(),
+        id: stem.replace(' ', ""),
+        author: vec!["Unknown".to_string()],
+        description: format!("Zipped mod found in {}", zip_path.display()),
+        prefix: if stem.len() >= 4 {
+            stem[0..4].to_lowercase()
+        } else {
+            stem.to_lowercase()
+        },
+        version: None,
+        path: zip_path.to_string_lossy().to_string(),
+        dependencies: Vec::new(),
+        conflicts: Vec::new(),
         catalog_match: None,
         is_duplicate: false,
     }))
@@ -2283,6 +2471,78 @@ mod tests {
         assert_eq!(lua_detected.author, vec!["Charlie"]);
         assert_eq!(lua_detected.prefix, "lua");
         assert_eq!(lua_detected.version.as_deref(), Some("1.2.3"));
+    }
+
+    #[test]
+    fn test_detect_mod_in_zip_from_metadata_json() {
+        use std::io::Write;
+
+        let td = tempdir().unwrap();
+        let zip_path = td.path().join("Joshi-sDecks-main.zip");
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        let opts = zip::write::SimpleFileOptions::default();
+
+        zw.add_directory("Joshi-sDecks-main/", opts).unwrap();
+        zw.start_file("Joshi-sDecks-main/metadata.json", opts)
+            .unwrap();
+        zw.write_all(
+            br#"{"id":"joshi's decks","name":"Joshi's Decks","author":["Joshi"],"description":"A collection of various decks.","prefix":"JoDe","main_file":"main.lua","version":"0.1.1"}"#,
+        )
+        .unwrap();
+        zw.start_file("Joshi-sDecks-main/main.lua", opts).unwrap();
+        zw.write_all(b"SMODS.Atlas{}\n").unwrap();
+        zw.finish().unwrap();
+
+        let detected = super::detect_mod_in_zip(&zip_path)
+            .unwrap()
+            .expect("zip mod should be detected");
+        assert_eq!(detected.name, "Joshi's Decks");
+        assert_eq!(detected.id, "joshi's decks");
+        assert_eq!(detected.prefix, "JoDe");
+        assert_eq!(detected.version.as_deref(), Some("0.1.1"));
+        assert_eq!(detected.author, vec!["Joshi"]);
+        assert_eq!(detected.path, zip_path.to_string_lossy());
+    }
+
+    #[test]
+    fn test_detect_mod_in_zip_lua_header_and_non_mod() {
+        use std::io::Write;
+
+        let td = tempdir().unwrap();
+
+        // Zip whose only metadata is a Steamodded Lua header.
+        let lua_zip = td.path().join("HeaderMod.zip");
+        let f = std::fs::File::create(&lua_zip).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        let opts = zip::write::SimpleFileOptions::default();
+        zw.start_file("HeaderMod/HeaderMod.lua", opts).unwrap();
+        zw.write_all(
+            b"--- STEAMODDED HEADER\n--- MOD_NAME: Header Mod\n--- MOD_ID: HeaderMod\n--- PREFIX: hdr\n--- VERSION: 2.0.0\n",
+        )
+        .unwrap();
+        zw.finish().unwrap();
+
+        let detected = super::detect_mod_in_zip(&lua_zip)
+            .unwrap()
+            .expect("lua-header zip should be detected");
+        assert_eq!(detected.name, "Header Mod");
+        assert_eq!(detected.id, "HeaderMod");
+        assert_eq!(detected.prefix, "hdr");
+        assert_eq!(detected.version.as_deref(), Some("2.0.0"));
+
+        // Zip with neither Lua nor JSON should not be treated as a mod.
+        let junk_zip = td.path().join("backup.zip");
+        let f = std::fs::File::create(&junk_zip).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        zw.start_file("notes.txt", opts).unwrap();
+        zw.write_all(b"not a mod").unwrap();
+        zw.finish().unwrap();
+
+        assert!(
+            super::detect_mod_in_zip(&junk_zip).unwrap().is_none(),
+            "non-mod zip should be ignored"
+        );
     }
 
     #[test]
