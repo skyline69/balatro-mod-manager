@@ -3,6 +3,7 @@ use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
+use sevenz_rust::{Error as SevenZError, decompress_with_extract_fn};
 use tar::Archive;
 use unrar::Archive as UnrarArchive;
 use zip::ZipArchive;
@@ -127,6 +128,7 @@ fn extract_archive_from_reader<R: Read + Seek>(
         .trim_end_matches(".tgz")
         .trim_end_matches(".tar")
         .trim_end_matches(".rar")
+        .trim_end_matches(".7z")
         .to_string();
     let mod_dir = mods_dir.join(&mod_dir_name);
 
@@ -141,17 +143,58 @@ fn extract_archive_from_reader<R: Read + Seek>(
         let source_path =
             source_path.ok_or_else(|| "RAR archives require a file path".to_string())?;
         extract_rar(source_path, &mod_dir)?;
+    } else if filename.ends_with(".7z") {
+        extract_7z(reader, &mod_dir)?;
     } else if filename.ends_with(".tar") {
         extract_tar(reader, &mod_dir)?;
     } else if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
         extract_tar_gz(reader, &mod_dir)?;
     } else {
         return Err(
-            "Unsupported file format. Only ZIP, TAR, TAR.GZ, and RAR are supported.".to_string(),
+            "Unsupported file format. Only ZIP, TAR, TAR.GZ, RAR, and 7Z are supported."
+                .to_string(),
         );
     }
 
     Ok(mod_dir)
+}
+
+fn extract_7z<R: Read + Seek>(reader: R, target_dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(target_dir)
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    decompress_with_extract_fn(reader, target_dir, |entry, contents, _| {
+        let relative_path = sanitize_7z_path(entry.name())
+            .ok_or_else(|| SevenZError::other("7Z archive contains an unsafe entry path"))?;
+        let output_path = target_dir.join(relative_path);
+
+        if entry.is_directory() {
+            std::fs::create_dir_all(&output_path).map_err(SevenZError::io)?;
+        } else {
+            if let Some(parent) = output_path.parent() {
+                std::fs::create_dir_all(parent).map_err(SevenZError::io)?;
+            }
+            let mut output = File::create(&output_path).map_err(SevenZError::io)?;
+            std::io::copy(contents, &mut output).map_err(SevenZError::io)?;
+        }
+
+        Ok(true)
+    })
+    .map_err(|e| format!("Failed to extract 7Z archive: {e}"))
+}
+
+fn sanitize_7z_path(entry_name: &str) -> Option<PathBuf> {
+    let mut path = PathBuf::new();
+    for component in Path::new(entry_name).components() {
+        match component {
+            std::path::Component::Normal(name) => path.push(name),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir
+            | std::path::Component::Prefix(_)
+            | std::path::Component::RootDir => return None,
+        }
+    }
+    (!path.as_os_str().is_empty()).then_some(path)
 }
 
 fn extract_zip<R: Read + Seek>(reader: R, target_dir: &Path) -> Result<(), String> {
@@ -447,12 +490,33 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_7z_basic() {
+        let temp_dir = TempDir::new().unwrap();
+        let source_dir = temp_dir.path().join("source");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::write(source_dir.join("init.lua"), "-- mod").unwrap();
+
+        let archive_path = temp_dir.path().join("mod.7z");
+        let mut archive = sevenz_rust::SevenZWriter::create(&archive_path).unwrap();
+        archive.push_source_path(&source_dir, |_| true).unwrap();
+        archive.finish().unwrap();
+
+        let target = temp_dir.path().join("extracted");
+        extract_7z(File::open(&archive_path).unwrap(), &target).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(target.join("source/init.lua")).unwrap(),
+            "-- mod"
+        );
+    }
+
+    #[test]
     fn test_unsupported_format_error() {
         let temp_dir = TempDir::new().unwrap();
         let mods_dir = temp_dir.path();
         let cursor = std::io::Cursor::new(Vec::<u8>::new());
 
-        let result = extract_archive_from_reader("file.7z", cursor, None, mods_dir);
+        let result = extract_archive_from_reader("file.invalid", cursor, None, mods_dir);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unsupported file format"));
     }
