@@ -505,7 +505,7 @@ mod tests {
         extract_7z(File::open(&archive_path).unwrap(), &target).unwrap();
 
         assert_eq!(
-            std::fs::read_to_string(target.join("source/init.lua")).unwrap(),
+            std::fs::read_to_string(target.join("init.lua")).unwrap(),
             "-- mod"
         );
     }
