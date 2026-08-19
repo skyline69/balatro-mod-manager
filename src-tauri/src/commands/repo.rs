@@ -64,13 +64,8 @@ pub async fn get_mod_details(title: String, dir_name: String) -> Result<ModDetai
     let repo_url = detail
         .repo
         .clone()
-        .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
-        .or_else(|| {
-            detail
-                .homepage
-                .clone()
-                .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
-        })
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| detail.homepage.clone().filter(|s| !s.trim().is_empty()))
         .or_else(|| {
             detail.meta.and_then(|m| {
                 if m.repo.trim().is_empty() {
@@ -645,13 +640,8 @@ pub async fn get_mod_repo_url(dir_name: String) -> Result<Option<String>, String
     let repo = detail
         .repo
         .clone()
-        .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
-        .or_else(|| {
-            detail
-                .homepage
-                .clone()
-                .and_then(|s| if s.trim().is_empty() { None } else { Some(s) })
-        })
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| detail.homepage.clone().filter(|s| !s.trim().is_empty()))
         .or_else(|| {
             detail.meta.and_then(|m| {
                 if m.repo.trim().is_empty() {
