@@ -3,7 +3,6 @@ use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
-use sevenz_rust::{Error as SevenZError, decompress_with_extract_fn};
 use tar::Archive;
 use unrar::Archive as UnrarArchive;
 use zip::ZipArchive;
@@ -159,42 +158,17 @@ fn extract_archive_from_reader<R: Read + Seek>(
     Ok(mod_dir)
 }
 
+/// Extracts a 7Z archive.
+///
+/// Entry paths are validated by `sevenz-rust2`, which rejects any name that would
+/// escape `target_dir` (`..`, absolute paths, or a Windows drive prefix) on every
+/// platform. See `test_extract_7z_rejects_path_traversal`.
 fn extract_7z<R: Read + Seek>(reader: R, target_dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(target_dir)
         .map_err(|e| format!("Failed to create target directory: {e}"))?;
 
-    decompress_with_extract_fn(reader, target_dir, |entry, contents, _| {
-        let relative_path = sanitize_7z_path(entry.name())
-            .ok_or_else(|| SevenZError::other("7Z archive contains an unsafe entry path"))?;
-        let output_path = target_dir.join(relative_path);
-
-        if entry.is_directory() {
-            std::fs::create_dir_all(&output_path).map_err(SevenZError::io)?;
-        } else {
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent).map_err(SevenZError::io)?;
-            }
-            let mut output = File::create(&output_path).map_err(SevenZError::io)?;
-            std::io::copy(contents, &mut output).map_err(SevenZError::io)?;
-        }
-
-        Ok(true)
-    })
-    .map_err(|e| format!("Failed to extract 7Z archive: {e}"))
-}
-
-fn sanitize_7z_path(entry_name: &str) -> Option<PathBuf> {
-    let mut path = PathBuf::new();
-    for component in Path::new(entry_name).components() {
-        match component {
-            std::path::Component::Normal(name) => path.push(name),
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir
-            | std::path::Component::Prefix(_)
-            | std::path::Component::RootDir => return None,
-        }
-    }
-    (!path.as_os_str().is_empty()).then_some(path)
+    sevenz_rust2::decompress(reader, target_dir)
+        .map_err(|e| format!("Failed to extract 7Z archive: {e}"))
 }
 
 fn extract_zip<R: Read + Seek>(reader: R, target_dir: &Path) -> Result<(), String> {
@@ -496,8 +470,11 @@ mod tests {
         std::fs::create_dir_all(&source_dir).unwrap();
         std::fs::write(source_dir.join("init.lua"), "-- mod").unwrap();
 
+        std::fs::create_dir_all(source_dir.join("assets")).unwrap();
+        std::fs::write(source_dir.join("assets/card.png"), "png").unwrap();
+
         let archive_path = temp_dir.path().join("mod.7z");
-        let mut archive = sevenz_rust::SevenZWriter::create(&archive_path).unwrap();
+        let mut archive = sevenz_rust2::ArchiveWriter::create(&archive_path).unwrap();
         archive.push_source_path(&source_dir, |_| true).unwrap();
         archive.finish().unwrap();
 
@@ -507,6 +484,33 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(target.join("init.lua")).unwrap(),
             "-- mod"
+        );
+        assert_eq!(
+            std::fs::read_to_string(target.join("assets/card.png")).unwrap(),
+            "png"
+        );
+    }
+
+    #[test]
+    fn test_extract_7z_rejects_path_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Hand-build an archive whose entry name escapes the extraction directory.
+        let archive_path = temp_dir.path().join("evil.7z");
+        let mut archive = sevenz_rust2::ArchiveWriter::create(&archive_path).unwrap();
+        let entry = sevenz_rust2::ArchiveEntry::new_file("../escaped.lua");
+        archive
+            .push_archive_entry(entry, Some(Cursor::new(b"pwned".to_vec())))
+            .unwrap();
+        archive.finish().unwrap();
+
+        let target = temp_dir.path().join("extracted");
+        let result = extract_7z(File::open(&archive_path).unwrap(), &target);
+
+        assert!(result.is_err(), "traversal entry should be rejected");
+        assert!(
+            !temp_dir.path().join("escaped.lua").exists(),
+            "archive escaped the extraction directory"
         );
     }
 
