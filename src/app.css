@@ -49,6 +49,9 @@
   --ui-help-bg: #0f1a2e;
   --ui-help-border: #2b9ce9;
   --ui-help-focus: #8ad7ff;
+  --ui-focus-ring: #8ad7ff;
+  --ui-controller-focus: #fdcf51;
+  --ui-controller-focus-shadow: rgba(253, 207, 81, 0.35);
   --ui-modal-overlay: rgba(10, 10, 12, 0.7);
   --ui-input-bg: #1f1f1f;
   --ui-input-border: #5b21b6;
@@ -179,6 +182,9 @@
   --ui-help-bg: #0b1424;
   --ui-help-border: #2a6fb7;
   --ui-help-focus: #6ec0ff;
+  --ui-focus-ring: #6ec0ff;
+  --ui-controller-focus: #f0c45c;
+  --ui-controller-focus-shadow: rgba(240, 196, 92, 0.36);
   --ui-modal-overlay: rgba(8, 12, 20, 0.82);
   --ui-input-bg: #101a2a;
   --ui-input-border: #243552;
@@ -266,6 +272,33 @@
 .app-body {
   background: var(--ui-bg);
   color: var(--ui-text);
+}
+
+:where(
+    button,
+    a[href],
+    input,
+    select,
+    textarea,
+    [tabindex]:not([tabindex="-1"]),
+    [role="button"]
+  ):focus-visible {
+  outline: 3px solid var(--ui-focus-ring);
+  outline-offset: 3px;
+}
+
+:where(
+    button,
+    a[href],
+    input,
+    select,
+    textarea,
+    [tabindex]:not([tabindex="-1"]),
+    [role="button"]
+  )[data-controller-focus="true"] {
+  outline: 3px solid var(--ui-controller-focus) !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--ui-controller-focus-shadow);
 }
 
 .default-scrollbar {

@@ -8,7 +8,6 @@
   import SubmitMod from "../../components/viewblock/SubmitMod.svelte";
   import Settings from "../../components/viewblock/Settings.svelte";
   import RequiresPopup from "../../components/RequiresPopup.svelte";
-  import WarningPopup from "../../components/WarningPopup.svelte";
   import SecurityPopup from "../../components/SecurityPopup.svelte";
   import LovelyMissingPopup from "../../components/LovelyMissingPopup.svelte";
   import CollectionImportPopup from "../../components/CollectionImportPopup.svelte";
@@ -424,13 +423,6 @@
   {/if}
 
   <RequiresPopup />
-
-  <WarningPopup
-    visible={$showWarningPopup.visible}
-    message={$showWarningPopup.message}
-    onConfirm={$showWarningPopup.onConfirm}
-    onCancel={$showWarningPopup.onCancel}
-  />
 
   <SecurityPopup />
 

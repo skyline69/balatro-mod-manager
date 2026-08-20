@@ -16,7 +16,16 @@
     onCancel();
     showWarningPopup.update((p) => ({ ...p, visible: false }));
   }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (visible && event.key === "Escape") {
+      event.preventDefault();
+      handleCancel();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 {#if visible}
   <div class="modal-background" transition:fade={{ duration: 160 }}>
