@@ -5,11 +5,11 @@ The Balatro Mod Manager by _Skyline_.
 Balatro Mod Manager is a standalone tool made for [Balatro](https://store.steampowered.com/app/2379780/Balatro/) that makes finding, downloading, and installing mods easy.
 
 <p align="center">
-    <a href="https://star-history.com/#skyline69/balatro-mod-manager&Date">
+    <a href="https://star-history.dera.page/#skyline69/balatro-mod-manager&type=Date">
         <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date&theme=dark" />
-            <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date" />
-            <img width="75%" alt="Star History Chart" src="https://api.star-history.com/svg?repos=skyline69/balatro-mod-manager&type=Date" />
+            <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=skyline69/balatro-mod-manager&type=Date&theme=dark" />
+            <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=skyline69/balatro-mod-manager&type=Date" />
+            <img width="75%" alt="Star History Chart" src="https://star-history.dera.page/svg?repos=skyline69/balatro-mod-manager&type=Date" />
         </picture>
     </a>
 </p>
