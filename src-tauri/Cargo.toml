@@ -42,6 +42,11 @@ flate2 = { version = "1", default-features = false, features = [
 	"rust_backend",
 ] }
 unrar = "0.5"
+sevenz-rust2 = { version = "0.21.5", default-features = false, features = [
+	"util",
+	"bzip2",
+	"ppmd",
+] }
 rayon = "1.12.0"
 urlencoding = "2.1.3"
 tokio = { version = "1.53.1", features = ["time", "sync", "fs", "io-util"] }
@@ -53,6 +58,14 @@ once_cell = "1.21.4"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Mirrors the codec set of the runtime dependency above, plus the encoder the
+# archive-building tests need, so tests exercise what ships.
+sevenz-rust2 = { version = "0.21.5", default-features = false, features = [
+	"util",
+	"bzip2",
+	"ppmd",
+	"compress",
+] }
 scopeguard = "1.2.0"
 mockito = "1.7.2"
 tokio-test = "0.4.5"
