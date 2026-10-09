@@ -14,6 +14,8 @@ import { descriptionsStore } from "../../stores/descriptions";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const addMessageMock = vi.hoisted(() => vi.fn());
+const isFullscreenMock = vi.hoisted(() => vi.fn());
+const setFullscreenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
@@ -25,6 +27,15 @@ vi.mock("$lib/stores", () => ({
 
 vi.mock("@tauri-apps/plugin-os", () => ({
   platform: vi.fn().mockResolvedValue("windows"),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  Window: {
+    getCurrent: () => ({
+      isFullscreen: (...args: unknown[]) => isFullscreenMock(...args),
+      setFullscreen: (...args: unknown[]) => setFullscreenMock(...args),
+    }),
+  },
 }));
 
 function createMockMod(title: string) {
@@ -49,6 +60,8 @@ describe("Settings view", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    isFullscreenMock.mockResolvedValue(true);
+    setFullscreenMock.mockResolvedValue(undefined);
     mockStorage = {};
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => mockStorage[key] ?? null,
@@ -160,5 +173,23 @@ describe("Settings view", () => {
     expect(get(catalogLastRefreshed)).toBeNull();
     expect(get(cachedVersions)).toEqual({ steamodded: [], talisman: [] });
     expect(get(descriptionsStore)).toEqual({});
+  });
+
+  it("shows and toggles fullscreen state", async () => {
+    render(Settings);
+
+    const toggle = await screen.findByRole("checkbox", {
+      name: /fullscreen/i,
+    });
+    await waitFor(() => {
+      expect((toggle as HTMLInputElement).checked).toBe(true);
+    });
+
+    await fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(setFullscreenMock).toHaveBeenCalledWith(false);
+    });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
   });
 });

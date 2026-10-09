@@ -1,25 +1,36 @@
 <script lang="ts">
   import { blur } from "svelte/transition";
   import MessageStack from "../components/MessageStack.svelte";
-  import { backgroundEnabled, updatePopupStore } from "../stores/modStore";
+  import WarningPopup from "../components/WarningPopup.svelte";
+  import {
+    backgroundEnabled,
+    currentModView,
+    showWarningPopup,
+    updatePopupStore,
+  } from "../stores/modStore";
   import { darkMode } from "../stores/ui";
   import { onMount } from "svelte";
   import DragDropOverlay from "../components/DragDropOverlay.svelte";
   import DepPrompt from "../components/DepPrompt.svelte";
   import { Window } from "@tauri-apps/api/window";
   // Initialize popup manager subscriptions
-  import { isPopupTransitioning } from "../stores/popupManager";
+  import {
+    hasActivePopup,
+    isPopupTransitioning,
+  } from "../stores/popupManager";
 
   import "../app.css";
   import UpdateAvailablePopup from "../components/UpdateAvailablePopup.svelte";
   import RecoveryScreen from "../components/RecoveryScreen.svelte";
   import { updatePromptDisabled } from "../stores/update";
   import { invoke } from "@tauri-apps/api/core";
+  import { startControllerNavigation } from "../utils/controllerNavigation";
 
   const { data, children } = $props();
 
   let isWindows = $state(false);
   let detectedPlatform: string | null = null;
+  let stopControllerNavigation: (() => void) | null = null;
 
   function normalize(v: string): string {
     // strip leading 'v' and any pre-release metadata
@@ -156,6 +167,36 @@
     }
   }
 
+  function dispatchEscape() {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  }
+
+  function showExitConfirmation() {
+    if ($showWarningPopup.visible) return;
+    showWarningPopup.set({
+      visible: true,
+      message: "Exit Balatro Mod Manager?",
+      onConfirm: () => {
+        invoke("exit_application");
+      },
+      onCancel: () => {},
+    });
+  }
+
+  function handleControllerCancel() {
+    if ($hasActivePopup || $currentModView) {
+      dispatchEscape();
+      return;
+    }
+
+    if (data.url === "/" || data.url === "/main" || data.url === "/main/") {
+      showExitConfirmation();
+      return;
+    }
+
+    dispatchEscape();
+  }
+
   onMount(() => {
     const unsubscribeTheme = darkMode.subscribe((enabled) => {
       document.documentElement.dataset.theme = enabled ? "dark" : "light";
@@ -176,9 +217,13 @@
     detectPlatform();
     setupAppWindow();
     checkForUpdate();
+    stopControllerNavigation = startControllerNavigation({
+      onCancel: handleControllerCancel,
+    });
 
     return () => {
       unsubscribeTheme();
+      stopControllerNavigation?.();
       window.clearTimeout(safetyNet);
       window.removeEventListener("error", onUnhandledError);
       window.removeEventListener("unhandledrejection", onUnhandledError);
@@ -215,6 +260,12 @@
 </div>
 
 <UpdateAvailablePopup />
+<WarningPopup
+  visible={$showWarningPopup.visible}
+  message={$showWarningPopup.message}
+  onConfirm={$showWarningPopup.onConfirm}
+  onCancel={$showWarningPopup.onCancel}
+/>
 
 <style>
   .layout-container {

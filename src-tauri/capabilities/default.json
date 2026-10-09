@@ -16,6 +16,8 @@
     "core:event:default",
     "core:window:allow-show",
     "core:window:allow-set-focus",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen",
     "window-state:default",
     "os:default"
   ],

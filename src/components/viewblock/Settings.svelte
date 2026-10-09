@@ -12,6 +12,7 @@
   import { onMount } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { invoke } from "@tauri-apps/api/core";
+  import { Window } from "@tauri-apps/api/window";
   import {
     backgroundEnabled,
     cachedVersions,
@@ -31,6 +32,8 @@
   let isConsoleEnabled = $state(false);
   let isBackgroundAnimationEnabled = $state(false);
   let isDarkMode = $state(false);
+  let isFullscreen = $state(false);
+  let isFullscreenChanging = $state(false);
   let lastReindexStats = $state({
     removedFiles: 0,
     cleanedEntries: 0,
@@ -190,6 +193,21 @@
     darkMode.set(newValue);
   }
 
+  async function handleFullscreenChange() {
+    const newValue = !isFullscreen;
+    isFullscreen = newValue;
+    isFullscreenChanging = true;
+    try {
+      await Window.getCurrent().setFullscreen(newValue);
+    } catch (error) {
+      isFullscreen = !newValue;
+      console.error("Failed to set fullscreen:", error);
+      addMessage("Failed to update fullscreen setting", "error");
+    } finally {
+      isFullscreenChanging = false;
+    }
+  }
+
   async function handleLinuxPrefixChange() {
     const newValue = linuxPrefix.replace(/\s+/g, " ").trim();
     if (newValue && newValue !== linuxPrefix) {
@@ -269,6 +287,12 @@
             navigator.userAgent.toLowerCase().includes("linux") &&
             !navigator.userAgent.toLowerCase().includes("android");
         }
+      }
+
+      try {
+        isFullscreen = await Window.getCurrent().isFullscreen();
+      } catch (error) {
+        console.warn("Failed to read fullscreen state:", error);
       }
 
       // Fetch all settings in a single batched IPC call
@@ -541,6 +565,23 @@
       </div>
       <p class="description-small">
         Use a darker palette across the UI for low-light environments.
+      </p>
+      <div class="console-settings">
+        <span class="label-text">Launch Fullscreen</span>
+        <div class="switch-container">
+          <label class="switch">
+            <input
+              type="checkbox"
+              aria-label="Fullscreen"
+              checked={isFullscreen}
+              onchange={handleFullscreenChange}
+              disabled={isFullscreenChanging}
+            /> <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <p class="description-small">
+        Start and stay in fullscreen unless you turn it off here.
       </p>
       {#if !isLinux}
         <div class="console-settings">
